@@ -62,11 +62,13 @@ def inspect_stl_installation(home: Path | None = None) -> dict:
     data_home = Path(os.environ.get("XDG_DATA_HOME", home / ".local/share"))
     local_install = data_home / "stl-steam"
     candidates = [
+        home / "stl/prefix/steamtinkerlaunch",
+        local_install / "steamtinkerlaunch",
         local_install / "bin/steamtinkerlaunch",
         home / ".steam/root/compatibilitytools.d/SteamTinkerLaunch/steamtinkerlaunch",
-        home / ".steam/root/compatibilitytools.d/steamtinkerlaunch/steamtinkerlaunch",
         home / ".local/share/Steam/compatibilitytools.d/SteamTinkerLaunch/steamtinkerlaunch",
-        home / ".local/share/Steam/compatibilitytools.d/steamtinkerlaunch/steamtinkerlaunch",
+        home / ".steam/steam/compatibilitytools.d/SteamTinkerLaunch/steamtinkerlaunch",
+        home / ".var/app/com.valvesoftware.Steam/.local/share/Steam/compatibilitytools.d/SteamTinkerLaunch/steamtinkerlaunch",
     ]
     path_executable = shutil.which("steamtinkerlaunch")
     if path_executable:
