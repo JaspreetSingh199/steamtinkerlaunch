@@ -313,7 +313,7 @@ class MainWindow(QMainWindow):
         answer = QMessageBox.question(
             self,
             "Install STL Compatibility Tool",
-            "This will run SteamTinkerLaunch's supported `compat add` command.\n\n"
+            "If STL is missing, it will be cloned into ~/stl/prefix. Then the upstream `compat add` command registers it with Steam.\n\n"
             "It will create a Steam compatibility-tool entry and will not change Skyrim, saves, mods, or MO2 instances.\n\n"
             "Target(s):\n" + targets + "\n\nProceed?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
