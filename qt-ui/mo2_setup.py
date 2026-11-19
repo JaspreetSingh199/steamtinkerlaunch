@@ -77,12 +77,12 @@ def run_mo2_command(command: str, home: Path | None = None, *, dry_run: bool = T
         return {"ok": False, "dry_run": False,
                 "message": (
                     "STL finished its install command, but this app could not find MO2.exe. "
-                    "MO2 is NOT verified yet.\\n\\n"
-                    "Next steps:\\n"
-                    "1. Open the Logs page and review/copy the STL output.\\n"
-                    "2. Go back to MO2 Setup and click 'Check Skyrim MO2 instance'.\\n"
-                    "3. If no instance is found, click 'Start MO2 standalone'. In MO2, create or select a Skyrim Special Edition instance.\\n"
-                    "4. Return here and click 'Check Skyrim MO2 instance' again.\\n\\n"
+                    "MO2 is NOT verified yet.\n\n"
+                    "Next steps:\n"
+                    "1. Open the Logs page and review/copy the STL output.\n"
+                    "2. Go back to MO2 Setup and click 'Check Skyrim MO2 instance'.\n"
+                    "3. If no instance is found, click 'Start MO2 standalone'. In MO2, create or select a Skyrim Special Edition instance.\n"
+                    "4. Return here and click 'Check Skyrim MO2 instance' again.\n\n"
                     "Do not reinstall MO2 yet. It may be installed in a custom location that this app does not detect."
                 ),
                 "output": result["output"], "executables": after["executables"],
