@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-from stl_compatibility import compatibility_tool_targets, find_stl_executable, install_compatibility_tool, inspect_compatibility_tool
+from stl_compatibility import (compatibility_tool_targets, find_stl_executable, install_compatibility_tool, inspect_compatibility_tool, reset_stl_steam)
 
 class CompatibilityToolTests(unittest.TestCase):
     def fixture_home(self, root: Path):
@@ -78,6 +78,59 @@ class CompatibilityToolTests(unittest.TestCase):
             self.assertTrue((source / "steamtinkerlaunch").exists())
             self.assertTrue((target / "toolmanifest.vdf").exists())
             self.assertEqual(run.call_count, 1)
+
+    def test_reset_dry_run_reports_scope_and_does_not_modify(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            steam, _ = self.fixture_home(home)
+            install = home / ".local/share/stl-steam"
+            install.mkdir(parents=True)
+            (install / "marker.txt").write_text("keep")
+            link = steam / "compatibilitytools.d/SteamTinkerLaunch"
+            link.parent.mkdir(parents=True)
+            link.symlink_to(install, target_is_directory=True)
+            result = reset_stl_steam(home, dry_run=True)
+            self.assertTrue(result["ok"])
+            self.assertTrue((install / "marker.txt").exists())
+            self.assertTrue(link.is_symlink())
+            self.assertIn("MO2 installations", " ".join(result["preserved"]))
+
+    def test_reset_backs_up_app_and_removes_only_compat_symlink(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            steam, _ = self.fixture_home(home)
+            install = home / ".local/share/stl-steam"
+            install.mkdir(parents=True)
+            (install / "marker.txt").write_text("keep")
+            target = steam / "compatibilitytools.d/SteamTinkerLaunch"
+            target.parent.mkdir(parents=True)
+            target.symlink_to(install, target_is_directory=True)
+            config = home / ".config/steamtinkerlaunch/gamecfgs/id/489830.conf"
+            config.parent.mkdir(parents=True)
+            config.write_text("MO2MODE=gui")
+            result = reset_stl_steam(home, dry_run=False)
+            self.assertTrue(result["ok"])
+            self.assertFalse(install.exists())
+            self.assertTrue(Path(result["backup"]).is_dir())
+            self.assertTrue((Path(result["backup"]) / "marker.txt").exists())
+            self.assertFalse(target.is_symlink())
+            self.assertEqual(config.read_text(), "MO2MODE=gui")
+
+    def test_reset_refuses_real_compatibility_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            steam, _ = self.fixture_home(home)
+            install = home / ".local/share/stl-steam"
+            install.mkdir(parents=True)
+            target = steam / "compatibilitytools.d/SteamTinkerLaunch"
+            target.mkdir(parents=True)
+            marker = target / "keep"
+            marker.write_text("preserve")
+            result = reset_stl_steam(home, dry_run=False)
+            self.assertFalse(result["ok"])
+            self.assertTrue(marker.exists())
+            self.assertEqual(marker.read_text(), "preserve")
+            self.assertTrue(result.get("backup"))
 
     def test_calls_upstream_add_and_verifies_target(self):
         with tempfile.TemporaryDirectory() as tmp:
