@@ -59,6 +59,10 @@ def run_mo2_command(command: str, home: Path | None = None, *, dry_run: bool = T
         return {"ok": False, "dry_run": dry_run, "message": "Unsupported MO2 command."}
     home = home or Path.home()
     state = inspect_mo2_installation(home)
+    if command == "install" and state["installed"]:
+        return {"ok": False, "dry_run": dry_run,
+                "message": "MO2 is already detected in a known STL/default prefix. Existing installation was not touched.",
+                "existing": state["executables"]}
     if command == "start" and not state["installed"]:
         return {"ok": False, "dry_run": dry_run,
                 "message": "MO2.exe was not found in common paths. Check STL's configured MO2COMPDATA or use its list-installed command before starting.",
