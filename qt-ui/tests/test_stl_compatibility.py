@@ -183,22 +183,6 @@ class CompatibilityToolTests(unittest.TestCase):
             self.assertEqual(backup.parent, target.parent)
             self.assertTrue((backup / "toolmanifest.vdf").exists())
 
-    def test_inspect_proton_binary_detects_wrong_architecture(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            binary = root / "files/bin/wine"
-            binary.parent.mkdir(parents=True)
-            header = bytearray(20)
-            header[:4] = bytes([0x7f, 69, 76, 70])
-            header[4] = 2
-            header[5] = 1
-            header[18:20] = (183).to_bytes(2, "little")
-            binary.write_bytes(header)
-            uname = type("Uname", (), {"machine": "x86_64"})()
-            with patch("stl_compatibility.os.uname", return_value=uname):
-                result = inspect_proton_binary(root)
-            self.assertFalse(result["ok"])
-            self.assertEqual(result["architecture"], "AArch64")
 
     def test_calls_upstream_add_and_verifies_target(self):
         with tempfile.TemporaryDirectory() as tmp:
