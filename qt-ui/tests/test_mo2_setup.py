@@ -1,3 +1,4 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -40,7 +41,8 @@ class MO2SetupTests(unittest.TestCase):
             home = Path(tmp)
             self.setup_files(home)
             before = sorted(str(p.relative_to(home)) for p in home.rglob("*"))
-            result = create_skyrim_mo2_instance(home, dry_run=True)
+            with patch.dict(os.environ, {"XDG_CONFIG_HOME": str(home / ".config")}):
+                result = create_skyrim_mo2_instance(home, dry_run=True)
             after = sorted(str(p.relative_to(home)) for p in home.rglob("*"))
             self.assertTrue(result["ok"])
             self.assertEqual(before, after)
@@ -62,7 +64,8 @@ class MO2SetupTests(unittest.TestCase):
             self.setup_files(home)
             with patch("mo2_setup.inspect_skyrim_mo2_instance",
                        return_value={"ok": True, "installed": True, "output": "Skyrim Special Edition (489830)"}):
-                result = create_skyrim_mo2_instance(home, dry_run=False)
+                with patch.dict(os.environ, {"XDG_CONFIG_HOME": str(home / ".config")}):
+                    result = create_skyrim_mo2_instance(home, dry_run=False)
             self.assertFalse(result["ok"])
             self.assertIn("not modified", result["message"])
 
@@ -76,8 +79,9 @@ class MO2SetupTests(unittest.TestCase):
                 if args[-3:] == ["mo2", "create-instance", "489830"]:
                     return type("Result", (), {"returncode": 0, "stdout": "created", "stderr": ""})()
                 return type("Result", (), {"returncode": 0, "stdout": "Skyrim Special Edition (489830) -> /prefix", "stderr": ""})()
-            with patch("mo2_setup.subprocess.run", side_effect=fake_run):
-                result = create_skyrim_mo2_instance(home, dry_run=False)
+            with patch.dict(os.environ, {"XDG_CONFIG_HOME": str(home / ".config")}):
+                with patch("mo2_setup.subprocess.run", side_effect=fake_run):
+                    result = create_skyrim_mo2_instance(home, dry_run=False)
             self.assertTrue(result["ok"], result)
             self.assertTrue(any(call[-3:] == ["mo2", "create-instance", "489830"] for call in calls))
 
