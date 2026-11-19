@@ -83,8 +83,9 @@ pass "alternate Steam library detection"
 # 5. Installation is staged and refuses to overwrite an existing destination.
 mockbin="$TMP/mockbin"
 fixture="$TMP/archive-fixture"
-mkdir -p "$mockbin" "$fixture/steamtinkerlaunch-test"
+mkdir -p "$mockbin" "$fixture/steamtinkerlaunch-test"/{collections,eval,guicfgs,lang,misc}
 printf '#!/usr/bin/env bash\nPREFIX="/usr"\necho test executable\n' > "$fixture/steamtinkerlaunch-test/steamtinkerlaunch"
+printf 'fixture readme\\n' > "$fixture/steamtinkerlaunch-test/README.md"
 chmod +x "$fixture/steamtinkerlaunch-test/steamtinkerlaunch"
 tar -czf "$TMP/mock-archive.tar.gz" -C "$TMP/archive-fixture" steamtinkerlaunch-test
 cat > "$mockbin/curl" <<'CURL'
@@ -99,7 +100,7 @@ done
 exit 1
 CURL
 chmod +x "$mockbin/curl"
-install_output="$(PATH="$mockbin:$PATH" MOCK_ARCHIVE="$TMP/mock-archive.tar.gz" run_installer --install 2>&1)" || fail "mock install failed"
+install_output="$(PATH="$mockbin:$PATH" MOCK_ARCHIVE="$TMP/mock-archive.tar.gz" run_installer --install 2>&1)" || { echo "$install_output" >&2; fail "mock install failed"; }
 installed="$TMP/data/stl-steam/bin/steamtinkerlaunch"
 [[ -x "$installed" ]] || fail "installed executable missing or not executable"
 [[ -d "$TMP/data/stl-steam/share/steamtinkerlaunch/collections" ]] || fail "support data not installed"
