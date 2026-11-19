@@ -61,3 +61,10 @@ The standalone installer should not invoke MO2 installation itself or make a gam
 - Determine which Skyrim executable (launcher, game executable, or SKSE loader) must be selected for MO2 profile configuration.
 - Determine whether current STL behavior can trigger MO2 setup through a normal game launch without changing the game's Steam launch options manually.
 - Verify the default Skyrim SE game entry in MO2 supported-game metadata and whether SKSE profile creation is required.
+
+## CLI entry points discovered
+
+- STL exposes command-line MO2 subcommands through its internal command handler: `steamtinkerlaunch mo2 download`, `mo2 install`, `mo2 start`, `mo2 list-supported`, `mo2 list-installed`, and `mo2 create-instance`.
+- `mo2 install` invokes the same `installMO2` routine through its status window; `mo2 start` calls `startMO2`, which calls `prepareMO2` and then launches MO2 with the configured instance.
+- `prepareMO2` is the game-aware path and accepts the AppID. It invokes `manageMO2GInstance` for numeric IDs and can pass `portable` when an MO2 instance mode has been selected.
+- This audit confirms CLI capabilities, but does not yet confirm a supported Steam launch-option recipe for Skyrim. Do not add launch-option edits to the bootstrap until that is traced and tested.
