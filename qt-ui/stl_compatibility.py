@@ -84,21 +84,8 @@ def inspect_compatibility_tool(home: Path | None = None) -> dict:
             "executable": str(executable) if executable else None}
 
 def install_compatibility_tool(home: Path | None = None, *, dry_run: bool = True) -> dict:
-    """Use upstream compat add; default is non-mutating dry-run."""
+    """Install upstream STL locally if missing, then register it as a Steam compatibility tool."""
     home = home or Path.home()
-    executable = find_stl_executable(home)
-    if executable is None:
-        source = install_stl_source(home, dry_run=dry_run)
-        if not source.get("ok"):
-            return {**source, "message": "STL installation preflight failed: " + source.get("message", "")}
-        if dry_run:
-            return {"ok": True, "dry_run": True, "message": "Would install upstream STL, then run \`steamtinkerlaunch compat add\`.", "targets": [str(p) for p in compatibility_tool_targets(home)], "install_target": source.get("target")}
-        source = install_stl_source(home, dry_run=False)
-        if not source.get("ok"):
-            return source
-        executable = find_stl_executable(home)
-        if executable is None:
-            return {"ok": False, "dry_run": False, "message": "STL installation completed, but executable detection failed.", "install": source}
     roots = find_steam_roots(home)
     if not roots:
         return {"ok": False, "dry_run": dry_run, "message": "No Steam root with steamapps was detected."}
@@ -108,6 +95,22 @@ def install_compatibility_tool(home: Path | None = None, *, dry_run: bool = True
         return {"ok": False, "dry_run": dry_run,
                 "message": "An STL compatibility-tool directory already exists. It was left untouched.",
                 "existing": [str(p) for p in existing]}
+    executable = find_stl_executable(home)
+    if executable is None:
+        source = install_stl_source(home, dry_run=dry_run)
+        if not source.get("ok"):
+            return {**source, "message": "STL installation preflight failed: " + source.get("message", "")}
+        if dry_run:
+            return {"ok": True, "dry_run": True,
+                    "message": "Would clone upstream STL into the user-local prefix, then run its compat add command.",
+                    "targets": [str(p) for p in targets], "install_target": source.get("target")}
+        source = install_stl_source(home, dry_run=False)
+        if not source.get("ok"):
+            return source
+        executable = find_stl_executable(home)
+        if executable is None:
+            return {"ok": False, "dry_run": False,
+                    "message": "STL was cloned, but executable detection failed.", "install": source}
     if dry_run:
         return {"ok": True, "dry_run": True,
                 "message": "Would run the upstream command: steamtinkerlaunch compat add",
@@ -120,7 +123,7 @@ def install_compatibility_tool(home: Path | None = None, *, dry_run: bool = True
                 "message": "STL compat add timed out. No automatic cleanup was attempted."}
     except OSError as error:
         return {"ok": False, "dry_run": False, "message": f"Could not start STL compat add: {error}"}
-    output = "\n".join(part for part in (completed.stdout, completed.stderr) if part).strip()
+    output = "\\n".join(part for part in (completed.stdout, completed.stderr) if part).strip()
     if completed.returncode:
         return {"ok": False, "dry_run": False,
                 "message": f"Upstream STL compat add failed with exit code {completed.returncode}.",
