@@ -84,7 +84,7 @@ pass "alternate Steam library detection"
 mockbin="$TMP/mockbin"
 fixture="$TMP/archive-fixture"
 mkdir -p "$mockbin" "$fixture/steamtinkerlaunch-test"
-printf '#!/usr/bin/env bash\necho test executable\n' > "$fixture/steamtinkerlaunch-test/steamtinkerlaunch"
+printf '#!/usr/bin/env bash\nPREFIX="/usr"\necho test executable\n' > "$fixture/steamtinkerlaunch-test/steamtinkerlaunch"
 chmod +x "$fixture/steamtinkerlaunch-test/steamtinkerlaunch"
 tar -czf "$TMP/mock-archive.tar.gz" -C "$TMP/archive-fixture" steamtinkerlaunch-test
 cat > "$mockbin/curl" <<'CURL'
@@ -103,6 +103,7 @@ install_output="$(PATH="$mockbin:$PATH" MOCK_ARCHIVE="$TMP/mock-archive.tar.gz" 
 installed="$TMP/data/stl-steam/bin/steamtinkerlaunch"
 [[ -x "$installed" ]] || fail "installed executable missing or not executable"
 [[ -d "$TMP/data/stl-steam/share/steamtinkerlaunch/collections" ]] || fail "support data not installed"
+grep -q "^PREFIX=\\"$TMP/data\\"$" "$installed" || fail "user-local prefix was not configured"
 grep -q "installed to" <<<"$install_output" || fail "install confirmation missing"
 pass "mocked archive installation"
 if output="$(PATH="$mockbin:$PATH" MOCK_ARCHIVE="$TMP/mock-archive.tar.gz" run_installer --install 2>&1)"; then
