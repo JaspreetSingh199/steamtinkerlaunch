@@ -115,7 +115,7 @@ while IFS= read -r entry; do
   for part in "${path_parts[@]}"; do
     [[ "$part" != ".." ]] || fail "Unsafe parent traversal path in archive: $entry"
   done
-  [[ "$entry" == steamtinkerlaunch-*/* || "$entry" == steamtinkerlaunch-* ]] || fail "Unexpected archive layout: $entry
+  [[ "$entry" == steamtinkerlaunch-*/* || "$entry" == steamtinkerlaunch-* ]] || fail "Unexpected archive layout: $entry"
 done <<< "$archive_entries"
 
 # Symlinks and hardlinks can escape the extraction root even when archive member
