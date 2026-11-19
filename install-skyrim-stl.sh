@@ -109,9 +109,19 @@ if [[ -e "$INSTALL_ROOT" ]]; then
   fail "Install directory already exists: $INSTALL_ROOT. Refusing to overwrite it."
 fi
 
-mkdir -p "$INSTALL_ROOT"
-cp -a "$source_dir/." "$INSTALL_ROOT/"
-chmod +x "$INSTALL_ROOT/steamtinkerlaunch"
+# Stage the install beside the final destination so the rename is atomic and
+# cannot leave a partially copied installation at INSTALL_ROOT.
+install_parent="$(dirname "$INSTALL_ROOT")"
+mkdir -p "$install_parent"
+staging_dir="$(mktemp -d "$install_parent/.stl-steam-staging.XXXXXX")"
+cleanup() { rm -rf "$tmpdir" "$staging_dir"; }
+trap cleanup EXIT
+
+cp -a "$source_dir/." "$staging_dir/"
+[[ -f "$staging_dir/steamtinkerlaunch" ]] || fail "Staged main executable missing."
+chmod +x "$staging_dir/steamtinkerlaunch"
+mv "$staging_dir" "$INSTALL_ROOT"
+staging_dir=""
 note "STL-Steam installed to $INSTALL_ROOT"
 note "This bootstrap does not alter Steam launch options or the Skyrim game directory."
 note "Next setup step is still manual pending verified launch-integration work."
