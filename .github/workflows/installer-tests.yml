@@ -1,0 +1,21 @@
+name: STL-Steam installer tests
+
+on:
+  push:
+    branches:
+      - stl-steam
+  pull_request:
+    branches:
+      - stl-steam
+
+jobs:
+  installer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bash syntax checks
+        run: |
+          bash -n install-skyrim-stl.sh
+          bash -n tests/test-install-skyrim-stl.sh
+      - name: Installer integration tests
+        run: bash tests/test-install-skyrim-stl.sh
