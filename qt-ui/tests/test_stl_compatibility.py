@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-from stl_compatibility import (compatibility_tool_targets, find_stl_executable, install_compatibility_tool, inspect_compatibility_tool, reset_stl_steam)
+from stl_compatibility import (compatibility_tool_targets, find_stl_executable, install_compatibility_tool, inspect_compatibility_tool, inspect_proton_binary, reset_stl_steam)
 
 class CompatibilityToolTests(unittest.TestCase):
     def fixture_home(self, root: Path):
@@ -147,7 +147,7 @@ class CompatibilityToolTests(unittest.TestCase):
             result = reset_stl_steam(home, dry_run=False)
             self.assertTrue(result["ok"], result.get("message"))
             self.assertFalse(target.exists())
-            backup_target = Path(result["backup"]) / "compatibility-tool-0"
+            backup_target = Path(result["compatibility_backups"][0])
             self.assertTrue((backup_target / "preserve.txt").exists())
             self.assertEqual((backup_target / "preserve.txt").read_text(), "preserve")
 
@@ -168,6 +168,37 @@ class CompatibilityToolTests(unittest.TestCase):
             self.assertTrue(marker.exists())
             self.assertEqual(marker.read_text(), "preserve")
             self.assertFalse(result.get("backup"))
+
+    def test_reset_backs_up_real_compatibility_directory_beside_steam_target(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            steam, _ = self.fixture_home(home)
+            target = steam / "compatibilitytools.d/SteamTinkerLaunch"
+            target.mkdir(parents=True)
+            (target / "compatibilitytool.vdf").write_text("owned")
+            (target / "toolmanifest.vdf").write_text("owned")
+            result = reset_stl_steam(home, dry_run=False)
+            self.assertTrue(result["ok"], result)
+            backup = Path(result["compatibility_backups"][0])
+            self.assertEqual(backup.parent, target.parent)
+            self.assertTrue((backup / "toolmanifest.vdf").exists())
+
+    def test_inspect_proton_binary_detects_wrong_architecture(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            binary = root / "files/bin/wine"
+            binary.parent.mkdir(parents=True)
+            header = bytearray(20)
+            header[:4] = bytes([0x7f, 69, 76, 70])
+            header[4] = 2
+            header[5] = 1
+            header[18:20] = (183).to_bytes(2, "little")
+            binary.write_bytes(header)
+            uname = type("Uname", (), {"machine": "x86_64"})()
+            with patch("stl_compatibility.os.uname", return_value=uname):
+                result = inspect_proton_binary(root)
+            self.assertFalse(result["ok"])
+            self.assertEqual(result["architecture"], "AArch64")
 
     def test_calls_upstream_add_and_verifies_target(self):
         with tempfile.TemporaryDirectory() as tmp:
