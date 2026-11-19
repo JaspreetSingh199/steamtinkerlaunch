@@ -71,6 +71,22 @@ class MO2SetupTests(unittest.TestCase):
             self.assertIn("not a verified installation", result["message"])
             self.assertIn("MO2COMPDATA", result["message"])
 
+    def test_instance_check_uses_stl_installed_instance_list(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            stl = home / ".local/share/stl-steam/bin/steamtinkerlaunch"
+            stl.parent.mkdir(parents=True)
+            stl.write_text("#!/bin/sh\\n")
+            stl.chmod(0o755)
+            listing = {"ok": True, "installed": True,
+                       "instances": ["Skyrim Special Edition (489830) -> /custom/mo2/pfx"],
+                       "output": "Skyrim Special Edition (489830) -> /custom/mo2/pfx"}
+            with patch("mo2_setup.inspect_mo2_instance_list", return_value=listing):
+                result = inspect_skyrim_mo2_instance(home)
+            self.assertTrue(result["ok"])
+            self.assertTrue(result["installed"])
+            self.assertIn("489830", result["output"])
+
     def test_create_instance_dry_run_does_not_change_prefix(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
