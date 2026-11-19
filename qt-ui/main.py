@@ -5,10 +5,11 @@ from __future__ import annotations
 import sys
 from PySide6.QtWidgets import (
     QApplication, QFrame, QLabel, QListWidget, QMainWindow, QPushButton,
-    QStackedWidget, QVBoxLayout, QHBoxLayout, QWidget, QPlainTextEdit,
+    QStackedWidget, QVBoxLayout, QHBoxLayout, QWidget, QPlainTextEdit, QMessageBox,
 )
 from skyrim_detection import detect_skyrim
 from mo2_inspection import inspect_mo2, inspect_stl_installation
+from stl_compatibility import install_compatibility_tool, inspect_compatibility_tool
 
 STYLE = """
 QWidget { background: #15171b; color: #e5e7eb; font-size: 14px; }
@@ -153,6 +154,9 @@ class MainWindow(QMainWindow):
         refresh = QPushButton("Refresh STL detection")
         refresh.clicked.connect(self.refresh_stl)
         layout.addWidget(refresh)
+        install = QPushButton("Install as Steam Compatibility Tool")
+        install.clicked.connect(self.install_stl_compatibility)
+        layout.addWidget(install)
         self.launch_note = QLabel("Steam launch configuration is not modified by this prototype.")
         self.launch_note.setObjectName("muted")
         self.launch_note.setWordWrap(True)
@@ -171,6 +175,36 @@ class MainWindow(QMainWindow):
             status = "STL not detected"
         self.stl_result = self._replace_card(self.compatibility_page, self.stl_result, card(status, detail))
         self._append_log("STL detection: " + status)
+        compat = inspect_compatibility_tool()
+        self._append_log("Steam compatibility tool: " + ("installed" if compat["installed"] else "not installed"))
+
+    def install_stl_compatibility(self) -> None:
+        preview = install_compatibility_tool(dry_run=True)
+        if not preview.get("ok"):
+            QMessageBox.warning(self, "STL compatibility tool", preview.get("message", "Preflight failed."))
+            self._append_log("STL compatibility install preflight failed: " + preview.get("message", ""))
+            return
+        targets = "\n".join(preview.get("targets", []))
+        answer = QMessageBox.question(
+            self,
+            "Install STL Compatibility Tool",
+            "This will run SteamTinkerLaunch's supported `compat add` command.\n\n"
+            "It will create a Steam compatibility-tool entry and will not change Skyrim, saves, mods, or MO2 instances.\n\n"
+            "Target(s):\n" + targets + "\n\nProceed?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            self._append_log("STL compatibility installation cancelled by user.")
+            return
+        result = install_compatibility_tool(dry_run=False)
+        self._append_log("STL compatibility install: " + result.get("message", "unknown result"))
+        if result.get("ok"):
+            QMessageBox.information(self, "STL Compatibility Tool", result.get("message", "Installed.") + "\n\nRestart Steam to make it discover the tool.")
+        else:
+            details = result.get("output", "")
+            QMessageBox.warning(self, "STL Compatibility Tool", result.get("message", "Installation failed.") + ("\n\n" + details if details else ""))
+        self.refresh_stl()
 
     def logs(self) -> QWidget:
         page = QWidget()
