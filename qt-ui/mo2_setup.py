@@ -127,10 +127,12 @@ def run_mo2_command(command: str, home: Path | None = None, *, dry_run: bool = T
     configured_name = None
     if config_file.is_file():
         try:
-            import re
             config_text = config_file.read_text(errors="replace")
-            match = re.search(r'(?im)^\\s*(?:PROTON|PROTONVERSION|CUPROTON)\\s*=\\s*["\\']?([^"\\'\\s]+)', config_text)
-            configured_name = match.group(1) if match else None
+            for line in config_text.splitlines():
+                key, separator, value = line.partition("=")
+                if separator and key.strip().upper() in {"PROTON", "PROTONVERSION", "CUPROTON"}:
+                    configured_name = value.strip().strip('"').strip("'")
+                    break
         except OSError:
             configured_name = None
     configured_proton = None
