@@ -20,14 +20,15 @@ STEAM_CANDIDATES = (
 
 
 def find_steam_roots(home: Path | None = None) -> list[Path]:
+    """Return both lexical and canonical Steam roots; do not lose install-layout identity."""
     home = home or Path.home()
     roots: list[Path] = []
     for relative in STEAM_CANDIDATES:
         path = home / relative
         if (path / "steamapps").is_dir():
-            resolved = path.resolve()
-            if resolved not in roots:
-                roots.append(resolved)
+            for candidate in (path, path.resolve()):
+                if candidate not in roots:
+                    roots.append(candidate)
     return roots
 
 
