@@ -8,6 +8,7 @@ from mo2_setup import (
     create_skyrim_mo2_instance,
     inspect_skyrim_mo2_instance,
     run_mo2_command,
+    proton_binary_architecture,
 )
 
 
@@ -21,6 +22,24 @@ class MO2SetupTests(unittest.TestCase):
         exe.parent.mkdir(parents=True)
         exe.write_bytes(b"fixture")
         return stl, exe
+
+    def test_proton_architecture_rejects_aarch64_on_x86_64_host(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wine = root / "files/bin/wine"
+            wine.parent.mkdir(parents=True)
+            header = bytearray(20)
+            header[:4] = bytes([0x7f, 69, 76, 70])
+            header[4] = 2
+            header[5] = 1
+            header[18:20] = (183).to_bytes(2, "little")
+            wine.write_bytes(header)
+            uname = type("Uname", (), {"machine": "x86_64"})()
+            with patch("mo2_setup.os.uname", return_value=uname):
+                result = proton_binary_architecture(root)
+            self.assertFalse(result["ok"])
+            self.assertEqual(result["architecture"], "AArch64")
+            self.assertIn("Choose a Proton build", result["message"])
 
     def test_install_refuses_to_overwrite_detected_mo2(self):
         with tempfile.TemporaryDirectory() as tmp:
