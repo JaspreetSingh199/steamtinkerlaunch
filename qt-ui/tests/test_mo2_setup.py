@@ -32,7 +32,8 @@ class MO2SetupTests(unittest.TestCase):
             exe = home / ".config/steamtinkerlaunch/compatdata/pfx/drive_c/Modding/MO2/ModOrganizer.exe"
             exe.parent.mkdir(parents=True)
             exe.write_bytes(b"preserve")
-            result = run_mo2_command("install", home, dry_run=False)
+            with patch.dict(os.environ, {"XDG_CONFIG_HOME": str(home / ".config")}):
+                result = run_mo2_command("install", home, dry_run=False)
             self.assertFalse(result["ok"])
             self.assertEqual(exe.read_bytes(), b"preserve")
 
