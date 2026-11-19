@@ -1,65 +1,46 @@
 # Wyrd — Skyrim Modding Environment
 
-Wyrd is a Linux desktop application for setting up and managing a Skyrim Special Edition modding environment. The goal is a guided, reversible workflow for Mod Organizer 2 (MO2), Proton, Skyrim, and common modding tools.
+Wyrd is a **Qt6 desktop GUI** for preparing a Skyrim Special Edition + Mod Organizer 2 environment on Linux. Its immediate job is deliberately small:
 
-> **Current status:** Experimental. The Qt6 UI is still backed by the earlier STL-Steam setup code. Wyrd's planned architecture is Kalium-inspired, with selected SteamTinkerLaunch capabilities retained as optional integrations rather than a required foundation.
+1. Detect Skyrim Special Edition in the user's Steam libraries.
+2. Detect installed Proton builds and reject incompatible Wine architectures.
+3. Download and verify the official MO2 release.
+4. Initialize a dedicated Proton prefix owned by Wyrd.
+5. Launch MO2 through that Proton runtime so MO2 can launch Skyrim through its virtual filesystem.
 
-## Roadmap
+Wyrd does not use SteamTinkerLaunch to install or launch MO2. Legacy STL files remain in the repository during migration, but the active Qt6 setup flow is independent of them.
 
-### V1 — Core
-- MO2 installation, update, repair and verification
-- Dedicated Proton environment and Proton selection
-- Skyrim detection
-- MO2 instance/profile management
-- Skyrim launch through MO2
-- SKSE detection
-- One-Time Run
-- Run EXE inside selected Proton
-- Backup and restore
-- Safe prefix repair/reset
-- Environment variables and custom launch arguments
-- Logs and diagnostics
-- GUI-driven installation
+## Run Wyrd
 
-### V2 — Modding enhancements
-- ReShade setup and preset management
-- Skyrim version downgrader, if safely feasible
-- Additional modding utilities
-
-### V3 — Native mod manager exploration
-Investigate a native Linux mod manager as a possible complement or replacement for MO2. Amethyst is a candidate to research, not a committed implementation. Evaluate virtual filesystem/deployment behavior, conflict handling, load order, compatibility with Skyrim tools and existing MO2 workflows before choosing.
-
-## Run from source
-
-```bash
+~~~bash
 bash qt-ui/run.sh
-```
+~~~
 
-The launcher creates `qt-ui/.venv` and installs PySide6 from `qt-ui/requirements.txt` if needed. Python 3, venv/pip support, and network access are required on first run.
+The launcher creates a local Python virtual environment and installs the Qt6 GUI and 7z extraction dependency on first run. You can also install a desktop menu entry:
 
-## Install a desktop menu entry
-
-```bash
+~~~bash
 bash qt-ui/install-desktop-launcher.sh
-```
+~~~
 
-Search your desktop app launcher for **Wyrd**.
+Search your desktop app launcher for **Wyrd**. All setup, progress, status, and launch actions are inside the Qt GUI. The shell command above only starts the desktop application.
 
-## Legacy STL-Steam setup
+## First-run workflow
 
-The earlier experimental STL-Steam bootstrap remains in this repository while the architecture is being migrated. Its scripts and internal paths are intentionally not renamed wholesale yet, to avoid breaking existing installs and recovery paths.
+- Install and launch Skyrim Special Edition through Steam.
+- Install a current Proton build through Steam's Compatibility settings or ProtonUp-Qt. Wyrd discovers Steam's built-in and user-installed Proton directories.
+- Open Wyrd, confirm the detected game and selected Proton build, and press **Install MO2**.
+- Wyrd downloads the standard 7z archive from the official [Mod Organizer 2 releases](https://github.com/ModOrganizer2/modorganizer/releases), validates the archive paths, extracts it into Wyrd's user-local application folder, and verifies ModOrganizer.exe.
+- Wyrd creates a separate prefix under ~/.local/share/wyrd/compatdata/mo2-skyrim. The detected Skyrim install path is registered only in this Wyrd prefix; the Skyrim game directory and Steam's own compatibility prefix are not modified.
+- Press **Launch MO2**. On the first launch, create a new MO2 instance and select **Skyrim Special Edition**. In MO2, select Skyrim or SKSE in the executable dropdown and press **Run**. MO2 then launches the game through its mod virtual filesystem.
 
-```bash
-bash install-skyrim-stl.sh
-bash install-skyrim-stl.sh --install
-```
+Wyrd leaves any existing MO2 installation untouched. It will not adopt or overwrite an unknown directory at its managed install/prefix paths. If an interrupted setup leaves a Wyrd-managed prefix incomplete, the GUI offers a prefix repair by rerunning Proton initialization; it does not delete the prefix.
 
-The first command is detection-only. The second installs the legacy STL-Steam source into its user-local destination and refuses to overwrite an existing destination.
+## Current scope and known limitation
 
-## Safety
+The current milestone is the core Skyrim SE → Proton → MO2 → game path. The first MO2 instance is created in MO2's own instance picker; Wyrd does not yet automate instance creation, SKSE setup, profile management, or a dedicated one-click game-launch action. Those come only after the basic desktop workflow has been tested on a real Steam/Proton system.
 
-Wyrd should prefer user-local and reversible operations. It must not silently delete or overwrite Skyrim game files, saves, mods, MO2 instances/profiles/downloads, Proton prefixes, Steam configuration, or user STL configuration/logs. Unknown ownership is a reason to stop and ask.
+CI can validate Python logic, archive/path safety, Proton architecture detection, and Qt widget behavior. CI cannot prove a real MO2 window or Skyrim game launch on the target Linux desktop; that final verification must happen on a machine with Steam, Skyrim, and Proton installed.
 
 ## Testing
 
-CI runs Python syntax/compile checks, unit tests, Qt offscreen smoke tests, installer integration tests, terminal-wrapper tests, and source-bundle packaging. CI cannot validate a real Steam/Proton/MO2 launch on the target Linux desktop; that remains a required real-machine test.
+CI runs Python compile checks, unit tests, Qt offscreen smoke tests, legacy installer checks, and source-bundle packaging. Wyrd's active setup GUI is Qt6; there is no terminal UI workflow for MO2 setup.
