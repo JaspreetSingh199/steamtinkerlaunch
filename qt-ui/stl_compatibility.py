@@ -248,7 +248,7 @@ def reset_stl_steam(home: Path | None = None, *, dry_run: bool = True) -> dict:
     return {"ok": True, "dry_run": False,
             "message": "STL-Steam app files and verified compatibility registrations were backed up. Personal game/MO2/Proton data was not touched.",
             "backup": str(app_backup) if app_backup.exists() else None,
-            "compatibility_backups": [str(b) for _, _, b in planned if b.exists()],
+            "compatibility_backups": [str(b) for _, _, b in planned if b.exists()],\n            "recovery_note": "Restore each compatibility backup to its original target path shown in compatibility_targets; restore the app-install backup to install_root.",\n            "compatibility_targets": [str(p) for p, _, _ in planned],
             "removed_compatibility_links": [str(p) for p, _ in removed_links],
             "restart_steam": bool(targets)}
 
