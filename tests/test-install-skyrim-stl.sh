@@ -80,4 +80,35 @@ output="$(run_installer --dry-run 2>&1)" || fail "alternate-library detection fa
 grep -q "$alt/steamapps/common/Skyrim Special Edition" <<<"$output" || fail "alternate game path not reported"
 pass "alternate Steam library detection"
 
-echo "All installer detection tests passed."
+# 5. Installation is staged and refuses to overwrite an existing destination.
+mockbin="$TMP/mockbin"
+fixture="$TMP/archive-fixture"
+mkdir -p "$mockbin" "$fixture/steamtinkerlaunch-test"
+printf '#!/usr/bin/env bash\necho test executable\n' > "$fixture/steamtinkerlaunch-test/steamtinkerlaunch"
+chmod +x "$fixture/steamtinkerlaunch-test/steamtinkerlaunch"
+tar -czf "$TMP/mock-archive.tar.gz" -C "$TMP/archive-fixture" steamtinkerlaunch-test
+cat > "$mockbin/curl" <<'CURL'
+#!/usr/bin/env bash
+while (($#)); do
+  if [[ "$1" == "-o" ]]; then
+    cp "$MOCK_ARCHIVE" "$2"
+    exit 0
+  fi
+  shift
+done
+exit 1
+CURL
+chmod +x "$mockbin/curl"
+install_output="$(PATH="$mockbin:$PATH" MOCK_ARCHIVE="$TMP/mock-archive.tar.gz" run_installer --install 2>&1)" || fail "mock install failed"
+installed="$TMP/data/stl-steam/steamtinkerlaunch"
+[[ -x "$installed" ]] || fail "installed executable missing or not executable"
+grep -q "installed to" <<<"$install_output" || fail "install confirmation missing"
+pass "mocked archive installation"
+if output="$(PATH="$mockbin:$PATH" MOCK_ARCHIVE="$TMP/mock-archive.tar.gz" run_installer --install 2>&1)"; then
+  fail "installer unexpectedly overwrote an existing install"
+fi
+grep -q "Refusing to overwrite" <<<"$output" || fail "existing-install refusal missing"
+pass "existing-install protection"
+
+echo "All installer detection and installation tests passed."
+
