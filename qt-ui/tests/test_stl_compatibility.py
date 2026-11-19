@@ -44,13 +44,15 @@ class CompatibilityToolTests(unittest.TestCase):
             self.assertTrue(marker.exists())
             self.assertEqual(marker.read_text(), "keep")
 
-    def test_missing_executable_fails_without_changes(self):
+    def test_missing_executable_dry_run_plans_upstream_install(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             steam = home / ".local/share/Steam"
             (steam / "steamapps").mkdir(parents=True)
-            result = install_compatibility_tool(home, dry_run=False)
-            self.assertFalse(result["ok"])
+            result = install_compatibility_tool(home, dry_run=True)
+            self.assertTrue(result["ok"])
+            self.assertTrue(result["dry_run"])
+            self.assertEqual(result["install_target"], str(home / "stl/prefix"))
             self.assertFalse((steam / "compatibilitytools.d").exists())
 
     def test_calls_upstream_add_and_verifies_target(self):
