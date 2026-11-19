@@ -1,54 +1,127 @@
-"""Safe MO2 installation and standalone-launch wrappers around upstream STL.
-
-The default actions are dry-run. Real actions are opt-in and refuse to install
-over a detected MO2 executable in common locations.
-"""
+"""Thin, guarded wrappers around SteamTinkerLaunch's documented MO2 CLI."""
 from __future__ import annotations
+
 import os
 from pathlib import Path
 import subprocess
+
 from stl_compatibility import find_stl_executable
 
-def mo2_executable_candidates(home: Path | None = None) -> list[Path]:
+APP_ID = "489830"
+
+
+def mo2_prefix_candidates(home: Path | None = None) -> list[Path]:
+    """Potential prefix paths from STL's MO2 defaults, for inspection only."""
     home = home or Path.home()
     config = Path(os.environ.get("XDG_CONFIG_HOME", home / ".config"))
     return [
-        config / "steamtinkerlaunch/mo2/compatdata/pfx/drive_c/Modding/MO2/ModOrganizer.exe",
-        config / "stl/mo2/compatdata/pfx/drive_c/Modding/MO2/ModOrganizer.exe",
-        home / ".local/share/Steam/steamapps/compatdata/489830/pfx/drive_c/Modding/MO2/ModOrganizer.exe",
+        config / "steamtinkerlaunch/compatdata/pfx",
+        config / "steamtinkerlaunch/mo2/compatdata/pfx",
     ]
+
+
+def mo2_executable_candidates(home: Path | None = None) -> list[Path]:
+    home = home or Path.home()
+    return [prefix / "drive_c/Modding/MO2/ModOrganizer.exe" for prefix in mo2_prefix_candidates(home)]
+
 
 def inspect_mo2_installation(home: Path | None = None) -> dict:
     candidates = mo2_executable_candidates(home)
     found = [path.resolve() for path in candidates if path.is_file()]
-    return {"installed": bool(found), "executables": [str(path) for path in found],
-            "candidates": [str(path) for path in candidates]}
+    return {
+        "installed": bool(found),
+        "executables": [str(path) for path in found],
+        "candidates": [str(path) for path in candidates],
+        "prefixes": [str(path) for path in mo2_prefix_candidates(home)],
+    }
+
+
+def _run_stl(args: list[str], home: Path, timeout: int = 120) -> dict:
+    stl = find_stl_executable(home)
+    if stl is None:
+        return {"ok": False, "message": "STL executable not found. Install STL-Steam first."}
+    try:
+        result = subprocess.run([str(stl), *args], check=False, capture_output=True,
+                                text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "message": f"STL command timed out: {' '.join(args)}"}
+    except OSError as error:
+        return {"ok": False, "message": f"Could not start STL: {error}"}
+    output = "\n".join(part for part in (result.stdout, result.stderr) if part).strip()
+    if result.returncode != 0:
+        return {"ok": False, "message": f"STL command failed ({result.returncode}): {' '.join(args)}",
+                "output": output, "returncode": result.returncode}
+    return {"ok": True, "output": output, "returncode": result.returncode}
+
 
 def run_mo2_command(command: str, home: Path | None = None, *, dry_run: bool = True) -> dict:
     if command not in {"install", "start"}:
         return {"ok": False, "dry_run": dry_run, "message": "Unsupported MO2 command."}
     home = home or Path.home()
-    stl = find_stl_executable(home)
-    if stl is None:
-        return {"ok": False, "dry_run": dry_run, "message": "STL executable not found. Install STL-Steam first."}
     state = inspect_mo2_installation(home)
     if command == "install" and state["installed"]:
-        return {"ok": False, "dry_run": dry_run, "message": "MO2 is already installed in a detected location. Existing installation was not touched.", "existing": state["executables"]}
+        return {"ok": False, "dry_run": dry_run,
+                "message": "MO2 is already installed in a detected location. Existing installation was not touched.",
+                "existing": state["executables"]}
     if command == "start" and not state["installed"]:
-        return {"ok": False, "dry_run": dry_run, "message": "MO2 is not detected. Install it first to avoid an implicit install during launch."}
+        return {"ok": False, "dry_run": dry_run,
+                "message": "MO2 executable is not detected; refusing to start an unverified installation."}
     if dry_run:
-        return {"ok": True, "dry_run": True, "message": f"Would run: steamtinkerlaunch mo2 {command}", "executable": str(stl)}
+        return {"ok": True, "dry_run": True, "message": f"Would run: steamtinkerlaunch mo2 {command}"}
+    result = _run_stl(["mo2", command], home, timeout=240 if command == "install" else 120)
+    if not result["ok"]:
+        return {**result, "dry_run": False}
+    after = inspect_mo2_installation(home)
+    if command == "install" and not after["installed"]:
+        return {"ok": False, "dry_run": False,
+                "message": "STL returned success, but MO2.exe was not found in the inspected prefix paths.",
+                "output": result["output"], "candidates": after["candidates"]}
+    return {"ok": True, "dry_run": False, "message": f"STL MO2 {command} command completed.",
+            "output": result["output"], "executables": after["executables"]}
+
+
+def inspect_skyrim_mo2_instance(home: Path | None = None) -> dict:
+    home = home or Path.home()
+    stl = find_stl_executable(home)
+    if stl is None:
+        return {"ok": False, "message": "STL executable not found."}
     try:
-        result = subprocess.run([str(stl), "mo2", command], check=False, capture_output=True,
-                               text=True, timeout=180 if command == "install" else 120)
-    except subprocess.TimeoutExpired:
-        return {"ok": False, "dry_run": False, "message": f"STL MO2 {command} timed out. No automatic cleanup was attempted."}
-    except OSError as error:
-        return {"ok": False, "dry_run": False, "message": f"Could not start STL MO2 {command}: {error}"}
+        result = subprocess.run([str(stl), "mo2", "list-installed"], check=False,
+                                capture_output=True, text=True, timeout=90)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return {"ok": False, "message": f"Could not list installed MO2 instances: {error}"}
     output = "\n".join(part for part in (result.stdout, result.stderr) if part).strip()
-    if result.returncode != 0:
-        return {"ok": False, "dry_run": False, "message": f"STL MO2 {command} failed with exit code {result.returncode}.", "output": output}
-    state_after = inspect_mo2_installation(home)
-    if command == "install" and not state_after["installed"]:
-        return {"ok": False, "dry_run": False, "message": "STL reported success, but MO2 executable was not found in expected paths.", "output": output, "candidates": state_after["candidates"]}
-    return {"ok": True, "dry_run": False, "message": f"STL MO2 {command} completed.", "output": output, "executables": state_after["executables"]}
+    found = any("(489830)" in line for line in output.splitlines())
+    return {"ok": result.returncode == 0, "installed": found, "output": output,
+            "message": "Skyrim SE MO2 instance detected." if found else "No Skyrim SE MO2 instance listed by STL."}
+
+
+def create_skyrim_mo2_instance(home: Path | None = None, *, dry_run: bool = True) -> dict:
+    """Ask STL to create its supported Skyrim SE instance; no manual INI creation."""
+    home = home or Path.home()
+    stl = find_stl_executable(home)
+    if stl is None:
+        return {"ok": False, "dry_run": dry_run, "message": "STL executable not found."}
+    mo2 = inspect_mo2_installation(home)
+    if not mo2["installed"]:
+        return {"ok": False, "dry_run": dry_run,
+                "message": "MO2.exe is not detected. Install MO2 before creating a game instance."}
+    before = inspect_skyrim_mo2_instance(home)
+    if before.get("installed"):
+        return {"ok": False, "dry_run": dry_run,
+                "message": "STL already lists a Skyrim SE instance. It was not modified.",
+                "instance": before["output"]}
+    if dry_run:
+        return {"ok": True, "dry_run": True,
+                "message": "Would run: steamtinkerlaunch mo2 create-instance 489830"}
+    result = _run_stl(["mo2", "create-instance", APP_ID], home, timeout=180)
+    if not result["ok"]:
+        return {**result, "dry_run": False}
+    after = inspect_skyrim_mo2_instance(home)
+    if after.get("installed"):
+        return {"ok": True, "dry_run": False,
+                "message": "STL created and verified the Skyrim SE MO2 instance.",
+                "output": result["output"], "instance": after["output"]}
+    return {"ok": False, "dry_run": False,
+            "message": "STL command completed, but its installed-instance list does not show AppID 489830.",
+            "output": result["output"], "verification": after.get("output", after.get("message"))}

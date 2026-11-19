@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
 from skyrim_detection import detect_skyrim
 from mo2_inspection import inspect_mo2, inspect_stl_installation
 from stl_compatibility import install_compatibility_tool, inspect_compatibility_tool
-from mo2_setup import run_mo2_command
+from mo2_setup import run_mo2_command, create_skyrim_mo2_instance, inspect_skyrim_mo2_instance
 from stl_compatibility import configure_skyrim_mo2, inspect_skyrim_mo2_config, remove_managed_skyrim_mo2_config
 
 STYLE = """
@@ -73,6 +73,7 @@ class MainWindow(QMainWindow):
         self.refresh_mo2()
         self.refresh_stl()
         self.refresh_skyrim_mo2_config()
+        self.refresh_skyrim_instance()
 
     def overview(self) -> QWidget:
         page = QWidget()
@@ -140,6 +141,16 @@ class MainWindow(QMainWindow):
         disable = QPushButton("Disable managed Skyrim MO2 config")
         disable.clicked.connect(self.disable_skyrim_mo2)
         layout.addWidget(disable)
+        instance = QPushButton("Create Skyrim SE MO2 instance")
+        instance.clicked.connect(self.create_skyrim_instance)
+        layout.addWidget(instance)
+        verify_instance = QPushButton("Check Skyrim MO2 instance")
+        verify_instance.clicked.connect(self.refresh_skyrim_instance)
+        layout.addWidget(verify_instance)
+        self.instance_status = QLabel("Skyrim instance status not checked yet.")
+        self.instance_status.setObjectName("muted")
+        self.instance_status.setWordWrap(True)
+        layout.addWidget(self.instance_status)
         self.skyrim_mo2_status = QLabel("Checking Skyrim per-game MO2 configuration…")
         self.skyrim_mo2_status.setObjectName("muted")
         self.skyrim_mo2_status.setWordWrap(True)
@@ -157,6 +168,33 @@ class MainWindow(QMainWindow):
             status = "MO2 not detected"
         self.mo2_result = self._replace_card(self.mo2_page, self.mo2_result, card(status, detail))
         self._append_log("MO2 detection: " + status)
+
+    def refresh_skyrim_instance(self) -> None:
+        result = inspect_skyrim_mo2_instance()
+        self.instance_status.setText(result.get("message", "Could not inspect instance.") + ("\\n" + result.get("output", "") if result.get("output") else ""))
+        self._append_log("Skyrim MO2 instance check: " + result.get("message", "unknown"))
+
+    def create_skyrim_instance(self) -> None:
+        preview = create_skyrim_mo2_instance(dry_run=True)
+        if not preview.get("ok"):
+            QMessageBox.warning(self, "Skyrim MO2 Instance", preview.get("message", "Preflight failed."))
+            self._append_log("Skyrim instance preflight: " + preview.get("message", ""))
+            return
+        answer = QMessageBox.question(
+            self, "Create Skyrim SE MO2 instance",
+            "Ask STL to create its supported MO2 instance for Skyrim Special Edition (AppID 489830)?\\n\\n"
+            "STL will use its own configured MO2 prefix and game metadata. An existing Skyrim instance is detected and left untouched. "
+            "No Skyrim files, saves, Steam launch options, or existing mods are copied or overwritten by this app.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            self._append_log("Skyrim instance creation cancelled.")
+            return
+        result = create_skyrim_mo2_instance(dry_run=False)
+        self._append_log("Skyrim instance create: " + result.get("message", "unknown"))
+        (QMessageBox.information if result.get("ok") else QMessageBox.warning)(self, "Skyrim MO2 Instance", result.get("message", "Operation failed.") + ("\\n\\n" + result.get("output", "") if result.get("output") else ""))
+        self.refresh_skyrim_instance()
 
     def refresh_skyrim_mo2_config(self) -> None:
         state = inspect_skyrim_mo2_config()
