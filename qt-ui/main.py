@@ -269,7 +269,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(page)
         heading = QLabel("Compatibility")
         heading.setObjectName("heading")
-        intro = QLabel("STL is intended to be selected as the Steam Compatibility Tool for Proton games. This page only checks for a user-local STL executable; it does not change Steam settings.")
+        intro = QLabel("Install upstream SteamTinkerLaunch into a user-local prefix and register it as a Steam Compatibility Tool. Steam launch settings are not edited.")
         intro.setObjectName("muted")
         intro.setWordWrap(True)
         layout.addWidget(heading)
