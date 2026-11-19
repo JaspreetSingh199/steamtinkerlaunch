@@ -28,6 +28,7 @@ source "$ROOT/misc/stl-ui.sh"
 [[ "$(ui_input Test Enter 10 50 default)" == "typed-value" ]]
 [[ "$(ui_file Test /tmp)" == "/tmp/selected-file" ]]
 [[ "$(ui_directory Test /tmp)" == "/tmp/selected-dir" ]]
+ui_gauge Test Progress
 ui_msg Test Hello
 ui_error Test Error
 ui_question Test Confirm
@@ -36,6 +37,7 @@ if ui_question Test Decline; then
   echo "yes/no wrapper lost the dialog exit code" >&2
   exit 1
 fi
+grep -q -- '--gauge' "$DIALOG_ARGS"
 grep -q -- '--menu' "$DIALOG_ARGS"
 grep -q -- '--checklist' "$DIALOG_ARGS"
 grep -q -- '--inputbox' "$DIALOG_ARGS"
