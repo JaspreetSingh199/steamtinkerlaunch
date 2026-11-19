@@ -74,11 +74,14 @@ class MO2SetupTests(unittest.TestCase):
             home = Path(tmp)
             self.setup_files(home)
             calls = []
+            created = {"value": False}
             def fake_run(args, **kwargs):
                 calls.append(args)
                 if args[-3:] == ["mo2", "create-instance", "489830"]:
+                    created["value"] = True
                     return type("Result", (), {"returncode": 0, "stdout": "created", "stderr": ""})()
-                return type("Result", (), {"returncode": 0, "stdout": "Skyrim Special Edition (489830) -> /prefix", "stderr": ""})()
+                listing = "Skyrim Special Edition (489830) -> /prefix" if created["value"] else "No installed MO2 instances"
+                return type("Result", (), {"returncode": 0, "stdout": listing, "stderr": ""})()
             with patch.dict(os.environ, {"XDG_CONFIG_HOME": str(home / ".config")}):
                 with patch("mo2_setup.subprocess.run", side_effect=fake_run):
                     result = create_skyrim_mo2_instance(home, dry_run=False)

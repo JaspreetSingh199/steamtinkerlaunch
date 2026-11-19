@@ -40,10 +40,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build source release bundle
         run: |
-          mkdir -p dist
-          tar --exclude=.git --exclude=qt-ui/.venv --exclude='*/__pycache__' -czf dist/stl-steam-skyrim-qt6-source.tar.gz .
+          bundle="$RUNNER_TEMP/stl-steam-skyrim-qt6-source.tar.gz"
+          tar --exclude=.git --exclude=qt-ui/.venv --exclude='*/__pycache__' --exclude=./dist --exclude=./dist/ -czf "$bundle" .
       - uses: actions/upload-artifact@v4
         with:
           name: stl-steam-skyrim-qt6-source
-          path: dist/stl-steam-skyrim-qt6-source.tar.gz
+          path: ${{ runner.temp }}/stl-steam-skyrim-qt6-source.tar.gz
           if-no-files-found: error
