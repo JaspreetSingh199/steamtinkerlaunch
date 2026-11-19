@@ -260,10 +260,18 @@ class MainWindow(QMainWindow):
         result = run_mo2_command(command, dry_run=False)
         self._append_log("MO2 " + command + ": " + result.get("message", "unknown result"))
         if result.get("ok"):
-            QMessageBox.information(self, "MO2 Setup", result.get("message", "Completed.") + ("\n\nMO2 is ready to configure an instance." if command == "start" else ""))
+            message = result.get("message", "Command started.")
+            QMessageBox.information(
+                self, "MO2 Setup",
+                message + "\n\nIMPORTANT: This confirms only that STL's MO2 process was started. "
+                "It does NOT mean MO2 has finished installing. Complete any installer window that appears, "
+                "then click 'Check Skyrim MO2 instance' here. Do not click Install again while the installer is open."
+            )
         else:
-            details = result.get("output", "")
-            QMessageBox.warning(self, "MO2 Setup", result.get("message", "Failed.") + ("\n\n" + details if details else ""))
+            QMessageBox.warning(
+                self, "MO2 Setup",
+                result.get("message", "Failed.") + "\n\nYour existing MO2 data has not been removed."
+            )
         self.refresh_mo2()
 
     def compatibility(self) -> QWidget:
