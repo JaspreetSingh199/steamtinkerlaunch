@@ -139,113 +139,94 @@ def install_compatibility_tool(home: Path | None = None, *, dry_run: bool = True
             "output": output, "targets": state["targets"]}
 
 def reset_stl_steam(home: Path | None = None, *, dry_run: bool = True) -> dict:
-    """Safely reset app-owned files after validating every target up front.
-
-    Only symlinks resolving to this app's install root (or its children) are
-    considered owned. All other entries cause an abort before any mutation.
-    """
+    """Back up app-owned files and remove verified Steam registration reversibly."""
     import time
-
     home = home or Path.home()
     data_home = Path(os.environ.get("XDG_DATA_HOME", home / ".local/share"))
     install_root = data_home / "stl-steam"
-    install_root_resolved = install_root.resolve(strict=False)
-    candidates = compatibility_tool_targets(home)
-    targets = [target for target in candidates
-               if target.exists() or target.is_symlink()]
-
-    # Validate all compatibility entries before moving any app files.
-    owned_links: list[Path] = []
-    original_link_targets: dict[Path, str] = {}
+    install_resolved = install_root.resolve(strict=False)
+    targets = [p for p in compatibility_tool_targets(home) if p.exists() or p.is_symlink()]
+    links: dict[Path, str] = {}
+    real_dirs: list[Path] = []
     for target in targets:
-        if not target.is_symlink():
-            kind = "directory" if target.is_dir() else "unexpected file"
+        if target.is_symlink():
+            try:
+                literal = os.readlink(target)
+                target.resolve(strict=True).relative_to(install_resolved)
+            except (OSError, RuntimeError, ValueError):
+                return {"ok": False, "dry_run": dry_run,
+                        "message": "A compatibility symlink is broken or points outside the STL-Steam install. Ownership cannot be verified; nothing was changed.",
+                        "preserved_target": str(target)}
+            links[target] = literal
+        elif target.is_dir() and (target / "compatibilitytool.vdf").is_file() and (target / "toolmanifest.vdf").is_file():
+            real_dirs.append(target)
+        else:
             return {"ok": False, "dry_run": dry_run,
-                    "message": f"A real {kind} exists at a Steam compatibility target. Ownership cannot be proven; nothing was changed.",
+                    "message": "A real directory or unexpected file exists at a Steam compatibility target. STL ownership cannot be verified; nothing was changed.",
                     "preserved_target": str(target)}
-        try:
-            raw_target = os.readlink(target)
-            link_target = target.resolve(strict=True)
-        except (OSError, RuntimeError):
-            return {"ok": False, "dry_run": dry_run,
-                    "message": "A broken or unresolvable compatibility symlink exists. Ownership cannot be verified; nothing was changed.",
-                    "preserved_target": str(target)}
-        try:
-            link_target.relative_to(install_root_resolved)
-        except ValueError:
-            return {"ok": False, "dry_run": dry_run,
-                    "message": "A compatibility symlink points outside the STL-Steam app install. It was left untouched; nothing was changed.",
-                    "preserved_target": str(target), "link_target": str(link_target)}
-        owned_links.append(target)
-        original_link_targets[target] = raw_target
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     backup = install_root.with_name(f"stl-steam.reset-backup-{timestamp}")
     if backup.exists() or backup.is_symlink():
-        return {"ok": False, "dry_run": dry_run,
-                "message": "The planned backup path already exists; nothing was changed.",
-                "backup": str(backup)}
-
+        return {"ok": False, "dry_run": dry_run, "message": "The planned backup path already exists; nothing was changed.", "backup": str(backup)}
     if dry_run:
         return {"ok": True, "dry_run": True,
-                "message": "Preview only. The validated app source will be moved to a sibling backup and only compatibility symlinks targeting that app install will be removed.",
+                "message": "Preview only. The app install and verified compatibility-tool directories will be moved into a backup; owned symlinks will be unlinked.",
                 "install_root": str(install_root) if install_root.exists() else None,
-                "compatibility_targets": [str(path) for path in owned_links],
-                "backup": str(backup),
-                "preserved": ["Skyrim game files and saves", "MO2 installations, instances, profiles, mods and downloads",
-                              "Proton prefixes", "Steam launch options and per-game configuration",
-                              "STL user configuration and logs outside this app's install directory"]}
-
-    changed: list[tuple[str, Path]] = []
+                "compatibility_targets": [str(p) for p in targets], "backup": str(backup),
+                "preserved": ["Skyrim game files and saves", "MO2 installations, instances, profiles, mods and downloads", "Proton prefixes", "Steam launch options and per-game configuration", "STL user configuration and logs outside this app install"]}
+    moved: list[tuple[Path, Path]] = []
+    removed_links: list[Path] = []
     try:
-        # Re-check immediately before mutation to avoid acting on swapped entries.
-        for target in owned_links:
-            if not target.is_symlink():
-                raise RuntimeError(f"Compatibility entry changed during reset: {target}")
-            resolved = target.resolve(strict=True)
-            try:
-                resolved.relative_to(install_root_resolved)
-            except ValueError as error:
-                raise RuntimeError(f"Compatibility link ownership changed: {target}") from error
-
-        if install_root.exists() or install_root.is_symlink():
+        for target, literal in links.items():
+            if not target.is_symlink() or os.readlink(target) != literal:
+                raise RuntimeError(f"Compatibility symlink changed during reset: {target}")
+            target.resolve(strict=True).relative_to(install_resolved)
+        for target in real_dirs:
+            if not target.is_dir() or not (target / "compatibilitytool.vdf").is_file() or not (target / "toolmanifest.vdf").is_file():
+                raise RuntimeError(f"Compatibility directory changed during reset: {target}")
+        backup.mkdir(mode=0o700)
+        if install_root.exists():
             if install_root.is_symlink() or not install_root.is_dir():
-                raise RuntimeError("STL-Steam install path is not a real directory; refusing to move it.")
-            os.rename(install_root, backup)
-            changed.append(("source", backup))
-
-        for target in owned_links:
-            # unlink removes the directory entry only; it never follows the link.
+                raise RuntimeError("STL app install path is not a real directory; refusing to move it.")
+            destination = backup / "app-install"
+            os.rename(install_root, destination)
+            moved.append((destination, install_root))
+        for index, target in enumerate(real_dirs):
+            destination = backup / f"compatibility-tool-{index}"
+            os.rename(target, destination)
+            moved.append((destination, target))
+        for target in links:
             target.unlink()
-            changed.append(("compatibility_link", target))
-    except (OSError, RuntimeError) as error:
+            removed_links.append(target)
+    except (OSError, RuntimeError, ValueError) as error:
         rollback_errors = []
-        for kind, path in reversed(changed):
+        for target in reversed(removed_links):
             try:
-                if kind == "compatibility_link":
-                    if path.exists() or path.is_symlink():
-                        raise FileExistsError(f"Refusing to replace new entry during rollback: {path}")
-                    # Recreate the original symlink without dereferencing it.
-                    # Use the preflight's recorded literal target text.
-                    path.symlink_to(original_link_targets[path])
-                elif kind == "source" and (backup.exists() or backup.is_symlink()):
-                    if install_root.exists() or install_root.is_symlink():
-                        raise FileExistsError(f"Refusing to overwrite install path during rollback: {install_root}")
-                    os.rename(backup, install_root)
+                if target.exists() or target.is_symlink():
+                    raise FileExistsError(f"Refusing to replace new compatibility entry: {target}")
+                target.symlink_to(links[target])
             except OSError as rollback_error:
                 rollback_errors.append(str(rollback_error))
-        detail = f"Reset stopped safely: {error}"
+        for source, destination in reversed(moved):
+            try:
+                if destination.exists() or destination.is_symlink():
+                    raise FileExistsError(f"Refusing to overwrite rollback destination: {destination}")
+                os.rename(source, destination)
+            except OSError as rollback_error:
+                rollback_errors.append(str(rollback_error))
+        try:
+            if backup.exists() and not any(backup.iterdir()):
+                backup.rmdir()
+        except OSError as rollback_error:
+            rollback_errors.append(str(rollback_error))
+        message = f"Reset stopped safely: {error}"
         if rollback_errors:
-            detail += " Rollback was incomplete: " + "; ".join(rollback_errors)
-        return {"ok": False, "dry_run": False, "message": detail,
-                "backup": str(backup) if backup.exists() else None,
-                "changed": [str(path) for _, path in changed],
-                "rollback_errors": rollback_errors}
-
+            message += " Rollback was incomplete: " + "; ".join(rollback_errors)
+        return {"ok": False, "dry_run": False, "message": message, "backup": str(backup) if backup.exists() else None, "rollback_errors": rollback_errors}
     return {"ok": True, "dry_run": False,
-            "message": "STL-Steam app source was backed up and owned compatibility links were removed. Personal game/MO2/Proton data was not touched.",
-            "backup": str(backup) if backup.exists() else None,
-            "removed_compatibility_links": [str(path) for kind, path in changed if kind == "compatibility_link"],
-            "restart_steam": bool(owned_links)}
+            "message": "STL-Steam files and verified compatibility registrations were moved to backup. Personal game/MO2/Proton data was not touched.",
+            "backup": str(backup), "removed_compatibility_links": [str(p) for p in removed_links],
+            "backed_up_compatibility_directories": [str(p) for p in real_dirs], "restart_steam": bool(targets)}
 
 
 def skyrim_game_config_path(home: Path | None = None, app_id: str = "489830") -> Path:
