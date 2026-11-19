@@ -39,6 +39,7 @@ find_steam_root() {
     "$HOME/.steam/steam"
     "$HOME/.local/share/Steam"
     "$HOME/.steam/root"
+    "$HOME/.var/app/com.valvesoftware.Steam/.local/share/Steam"
   )
   for candidate in "${candidates[@]}"; do
     if [[ -d "$candidate/steamapps" ]]; then
@@ -76,7 +77,11 @@ detect_skyrim() {
   return 1
 }
 
-find_steam_root || fail "Steam installation not found in standard locations. This prototype currently supports native Steam installs."
+for dependency in realpath awk sed sort; do
+  command -v "$dependency" >/dev/null || fail "Required command '$dependency' was not found. Install it and rerun."
+done
+
+find_steam_root || fail "Steam installation not found in standard locations (native or Flatpak Steam)."
 note "Steam root: $STEAM_ROOT"
 detect_skyrim || fail "Skyrim Special Edition (AppID $APPID) not found in detected Steam libraries."
 note "Skyrim SE detected: $GAME_DIR"
