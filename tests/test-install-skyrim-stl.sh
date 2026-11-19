@@ -80,7 +80,23 @@ output="$(run_installer --dry-run 2>&1)" || fail "alternate-library detection fa
 grep -q "$alt/steamapps/common/Skyrim Special Edition" <<<"$output" || fail "alternate game path not reported"
 pass "alternate Steam library detection"
 
-# 5. Installation is staged and refuses to overwrite an existing destination.
+# 5. Flatpak Steam root is recognized.
+rm -rf "$steam" "$alt"
+flatpak_steam="$TMP/home/.var/app/com.valvesoftware.Steam/.local/share/Steam"
+flatpak_game="$flatpak_steam/steamapps/common/Skyrim Special Edition"
+mkdir -p "$flatpak_game"
+cat > "$flatpak_steam/steamapps/appmanifest_489830.acf" <<'MANIFEST'
+"AppState"
+{
+  "appid" "489830"
+  "installdir" "Skyrim Special Edition"
+}
+MANIFEST
+output="$(run_installer --dry-run 2>&1)" || fail "Flatpak Steam detection failed"
+grep -q "$flatpak_game" <<<"$output" || fail "Flatpak Skyrim path not reported"
+pass "Flatpak Steam detection"
+
+# 6. Installation is staged and refuses to overwrite an existing destination.
 mockbin="$TMP/mockbin"
 fixture="$TMP/archive-fixture"
 mkdir -p "$mockbin" "$fixture/steamtinkerlaunch-test"/{collections,eval,guicfgs,lang,misc}
