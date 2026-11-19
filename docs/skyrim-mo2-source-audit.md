@@ -68,3 +68,9 @@ The standalone installer should not invoke MO2 installation itself or make a gam
 - `mo2 install` invokes the same `installMO2` routine through its status window; `mo2 start` calls `startMO2`, which calls `prepareMO2` and then launches MO2 with the configured instance.
 - `prepareMO2` is the game-aware path and accepts the AppID. It invokes `manageMO2GInstance` for numeric IDs and can pass `portable` when an MO2 instance mode has been selected.
 - This audit confirms CLI capabilities, but does not yet confirm a supported Steam launch-option recipe for Skyrim. Do not add launch-option edits to the bootstrap until that is traced and tested.
+
+## MO2 game metadata
+
+- The shipped `misc/mo2games.txt` includes `Skyrim Special Edition` with Steam AppID `489830` and internal instance name `skyrimspecialedition`.
+- The game-specific instance lookup uses that metadata; therefore Skyrim SE is not an unsupported MO2 target in this STL source snapshot.
+- The list also includes Skyrim LE (AppID `72850`) and Skyrim VR (AppID `611670`), but the installer scope remains SE only.
