@@ -67,10 +67,11 @@ def find_steam_roots(home: Path | None = None) -> list[Path]:
     roots = []
     for candidate in candidates:
         if (candidate / "steamapps").is_dir():
-            resolved = candidate.resolve()
-            if resolved not in roots:
-                roots.append(resolved)
+            # Preserve the path spelling used by Steam for its compatibilitytools.d.
+            if candidate not in roots:
+                roots.append(candidate)
     return roots
+
 
 def compatibility_tool_targets(home: Path | None = None) -> list[Path]:
     return [root / "compatibilitytools.d" / TOOL_DIR_NAME for root in find_steam_roots(home)]
