@@ -91,7 +91,7 @@ def skyrim_game_config_path(home: Path | None = None, app_id: str = "489830") ->
     """Return STL's per-game config location without creating it."""
     home = home or Path.home()
     data_home = Path(os.environ.get("XDG_CONFIG_HOME", home / ".config"))
-    return data_home / "steamtinkerlaunch" / "games" / app_id / "game.cfg"
+    return data_home / "steamtinkerlaunch" / "gamecfgs" / "id" / f"{app_id}.conf"
 
 
 def inspect_skyrim_mo2_config(home: Path | None = None, app_id: str = "489830") -> dict:
@@ -112,7 +112,6 @@ def configure_skyrim_mo2(home: Path | None = None, *, dry_run: bool = True,
                          mode: str = "gui", app_id: str = "489830") -> dict:
     """Create only a missing Skyrim STL config; preserve any existing file."""
     import tempfile
-    import re
     if mode not in {"gui", "silent"}:
         return {"ok": False, "dry_run": dry_run, "message": "MO2 mode must be gui or silent."}
     state = inspect_skyrim_mo2_config(home, app_id)
@@ -161,7 +160,7 @@ def remove_managed_skyrim_mo2_config(home: Path | None = None, app_id: str = "48
     if not text.startswith("# Managed by STL-Steam."):
         return {"ok": False, "message": "Config is not marked as managed by STL-Steam; it was left untouched.", "path": str(path)}
     # Rename to a timestamp-independent unique backup instead of deletion.
-    backup = path.with_name("game.cfg.stl-steam-backup")
+    backup = path.with_name(path.name + ".stl-steam-backup")
     if backup.exists():
         return {"ok": False, "message": "The reversible backup already exists; refusing to replace it.", "backup": str(backup)}
     try:

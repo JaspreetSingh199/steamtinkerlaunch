@@ -89,7 +89,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(card("STL-Steam", "The installer will be staged and verified before setup actions are enabled."))
         layout.addWidget(card("Mod Organizer 2", "Existing MO2 installations and instances will be preserved."))
         layout.addStretch(1)
-        note = QLabel("Read-only detection is enabled. Install and launch actions are not yet connected.")
+        note = QLabel("Read-only detection is enabled. Steam launch options and the game prefix are not modified.")
         note.setObjectName("muted")
         note.setWordWrap(True)
         layout.addWidget(note)
