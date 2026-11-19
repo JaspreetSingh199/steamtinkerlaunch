@@ -111,9 +111,20 @@ archive_entries="$(tar -tzf "$archive")" || fail "Downloaded archive is not a va
 while IFS= read -r entry; do
   [[ -n "$entry" ]] || continue
   [[ "$entry" != /* ]] || fail "Unsafe absolute path in archive: $entry"
-  [[ "$entry" != *".."* ]] || fail "Unsafe parent traversal path in archive: $entry"
-  [[ "$entry" == steamtinkerlaunch-*/* || "$entry" == steamtinkerlaunch-* ]] || fail "Unexpected archive layout: $entry"
+  IFS='/' read -r -a path_parts <<< "$entry"
+  for part in "${path_parts[@]}"; do
+    [[ "$part" != ".." ]] || fail "Unsafe parent traversal path in archive: $entry"
+  done
+  [[ "$entry" == steamtinkerlaunch-*/* || "$entry" == steamtinkerlaunch-* ]] || fail "Unexpected archive layout: $entry
 done <<< "$archive_entries"
+
+# Symlinks and hardlinks can escape the extraction root even when archive member
+# names are safe. This source installer expects a plain source tree.
+archive_verbose="$(tar -tvzf "$archive")" || fail "Could not inspect archive entries."
+while IFS= read -r listing; do
+  [[ -n "$listing" ]] || continue
+  [[ "${listing:0:1}" != "l" && "${listing:0:1}" != "h" ]] || fail "Links are not accepted in the source archive."
+done <<< "$archive_verbose"
 
 mkdir -p "$tmpdir/unpack"
 tar -xzf "$archive" -C "$tmpdir/unpack"
