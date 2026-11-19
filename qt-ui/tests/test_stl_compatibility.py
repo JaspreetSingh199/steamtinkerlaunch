@@ -116,7 +116,7 @@ class CompatibilityToolTests(unittest.TestCase):
             home = Path(tmp)
             steam, _ = self.fixture_home(home)
             install = home / ".local/share/stl-steam"
-            install.mkdir(parents=True)
+            install.mkdir(parents=True, exist_ok=True)
             (install / "marker.txt").write_text("keep")
             target = steam / "compatibilitytools.d/SteamTinkerLaunch"
             target.parent.mkdir(parents=True)
@@ -137,7 +137,7 @@ class CompatibilityToolTests(unittest.TestCase):
             home = Path(tmp)
             steam, _ = self.fixture_home(home)
             install = home / ".local/share/stl-steam"
-            install.mkdir(parents=True)
+            install.mkdir(parents=True, exist_ok=True)
             target = steam / "compatibilitytools.d/SteamTinkerLaunch"
             target.mkdir(parents=True)
             (target / "compatibilitytool.vdf").write_text("owned marker")
@@ -156,7 +156,7 @@ class CompatibilityToolTests(unittest.TestCase):
             home = Path(tmp)
             steam, _ = self.fixture_home(home)
             install = home / ".local/share/stl-steam"
-            install.mkdir(parents=True)
+            install.mkdir(parents=True, exist_ok=True)
             (install / "app-marker").write_text("keep")
             target = steam / "compatibilitytools.d/SteamTinkerLaunch"
             target.mkdir(parents=True)
