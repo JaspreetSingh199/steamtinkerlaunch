@@ -44,6 +44,19 @@ class CompatibilityToolTests(unittest.TestCase):
             self.assertTrue(marker.exists())
             self.assertEqual(marker.read_text(), "keep")
 
+    def test_verified_existing_compatibility_tool_is_reported_as_installed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            steam, _ = self.fixture_home(home)
+            target = steam / "compatibilitytools.d/SteamTinkerLaunch"
+            target.mkdir(parents=True)
+            (target / "compatibilitytool.vdf").write_text("owned")
+            (target / "toolmanifest.vdf").write_text("owned")
+            result = install_compatibility_tool(home, dry_run=False)
+            self.assertTrue(result["ok"])
+            self.assertTrue(result["already_installed"])
+            self.assertEqual(result["existing"], [str(target)])
+
     def test_missing_executable_dry_run_plans_upstream_install(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
