@@ -37,6 +37,7 @@ class SkyrimMO2ConfigTests(unittest.TestCase):
             state = inspect_skyrim_mo2_config(home)
             self.assertTrue(state["exists"])
             self.assertEqual(state["mo2_mode"], "gui")
+            self.assertTrue(state["managed"])
             self.assertTrue(Path(state["path"]).read_text().startswith("# Managed by STL-Steam."))
 
     def test_existing_user_config_is_preserved(self):
