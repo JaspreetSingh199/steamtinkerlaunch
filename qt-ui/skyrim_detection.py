@@ -14,7 +14,7 @@ STEAM_CANDIDATES = (
 
 def _parse_vdf_paths(text: str) -> list[str]:
     # Steam libraryfolders VDF: extract values associated with the "path" key.
-    return [p.replace("\\\\", "\\") for p in re.findall(r'"path"\\s+"([^"]+)"', text)]
+    return [p.replace("\\\\", "\\") for p in re.findall(r'"path"\s+"([^"]+)"', text)]
 
 def find_steam_roots(home: Path | None = None) -> list[Path]:
     home = home or Path.home()
@@ -51,7 +51,7 @@ def detect_skyrim(home: Path | None = None) -> dict:
                 text = manifest.read_text(errors="replace")
             except OSError:
                 continue
-            match = re.search(r'"installdir"\\s+"([^"]+)"', text)
+            match = re.search(r'"installdir"\s+"([^"]+)"', text)
             if not match:
                 continue
             game = library / "common" / match.group(1)
