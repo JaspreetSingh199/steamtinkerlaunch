@@ -30,6 +30,36 @@ def find_stl_executable(home: Path | None = None) -> Path | None:
             return candidate.resolve()
     return None
 
+
+def inspect_proton_binary(proton_root: Path) -> dict:
+    """Inspect Proton's Wine ELF architecture before attempting to execute it."""
+    import struct
+    candidates = [proton_root / "files/bin/wine", proton_root / "dist/bin/wine"]
+    for binary in candidates:
+        if not binary.is_file():
+            continue
+        try:
+            with binary.open("rb") as handle:
+                header = handle.read(20)
+            if len(header) < 20 or header[:4] != b"\\x7fELF":
+                return {"ok": False, "binary": str(binary), "message": "The selected Proton Wine file is not a valid ELF executable."}
+            endian = "<" if header[5] == 1 else ">" if header[5] == 2 else None
+            if endian is None:
+                return {"ok": False, "binary": str(binary), "message": "Wine binary has an invalid ELF byte order."}
+            machine = struct.unpack(endian + "H", header[18:20])[0]
+            names = {3: "x86", 40: "ARM", 62: "x86_64", 183: "AArch64"}
+            architecture = names.get(machine, f"ELF machine {machine}")
+            host = os.uname().machine
+            compatible = (host in {"x86_64", "amd64"} and architecture == "x86_64") or (
+                host in {"aarch64", "arm64"} and architecture == "AArch64")
+            return {"ok": compatible, "binary": str(binary), "architecture": architecture,
+                    "host_architecture": host,
+                    "message": "Wine architecture matches this host." if compatible else
+                    f"Selected Proton Wine is {architecture}, but this host is {host}. Choose an x86_64 Proton build."}
+        except OSError as error:
+            return {"ok": False, "binary": str(binary), "message": f"Could not inspect Proton Wine binary: {error}"}
+    return {"ok": False, "message": "No Wine binary was found in the selected Proton distribution."}
+
 def install_stl_source(home: Path | None = None, *, dry_run: bool = True) -> dict:
     """Clone upstream STL into the Protonup-Qt-compatible user-local prefix, without overwriting."""
     home = home or Path.home()
