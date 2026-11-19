@@ -58,7 +58,8 @@ class CompatibilityToolTests(unittest.TestCase):
     def test_installs_upstream_source_then_registers_compat_tool(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
-            steam, _ = self.fixture_home(home)
+            steam, local_exe = self.fixture_home(home)
+            local_exe.unlink()  # force the test through the upstream clone path
             source = home / "stl/prefix"
             target = steam / "compatibilitytools.d/SteamTinkerLaunch"
             def fake_run(command, **kwargs):
@@ -77,14 +78,16 @@ class CompatibilityToolTests(unittest.TestCase):
             self.assertTrue(result["ok"])
             self.assertTrue((source / "steamtinkerlaunch").exists())
             self.assertTrue((target / "toolmanifest.vdf").exists())
-            self.assertEqual(run.call_count, 1)
+            self.assertEqual(run.call_count, 2)
+            self.assertEqual(run.call_args_list[0].args[0][1], "clone")
+            self.assertEqual(run.call_args_list[1].args[0][-2:], ["compat", "add"])
 
     def test_reset_dry_run_reports_scope_and_does_not_modify(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             steam, _ = self.fixture_home(home)
             install = home / ".local/share/stl-steam"
-            install.mkdir(parents=True)
+            install.mkdir(parents=True, exist_ok=True)
             (install / "marker.txt").write_text("keep")
             link = steam / "compatibilitytools.d/SteamTinkerLaunch"
             link.parent.mkdir(parents=True)
