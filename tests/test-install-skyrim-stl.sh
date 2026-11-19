@@ -103,7 +103,7 @@ install_output="$(PATH="$mockbin:$PATH" MOCK_ARCHIVE="$TMP/mock-archive.tar.gz" 
 installed="$TMP/data/stl-steam/bin/steamtinkerlaunch"
 [[ -x "$installed" ]] || fail "installed executable missing or not executable"
 [[ -d "$TMP/data/stl-steam/share/steamtinkerlaunch/collections" ]] || fail "support data not installed"
-grep -q "^PREFIX=\\"$TMP/data\\"$" "$installed" || fail "user-local prefix was not configured"
+grep -Fq "PREFIX=\"$TMP/data\"" "$installed" || fail "user-local prefix was not configured"
 grep -q "installed to" <<<"$install_output" || fail "install confirmation missing"
 pass "mocked archive installation"
 if output="$(PATH="$mockbin:$PATH" MOCK_ARCHIVE="$TMP/mock-archive.tar.gz" run_installer --install 2>&1)"; then
