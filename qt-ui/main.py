@@ -232,7 +232,7 @@ class MainWindow(QMainWindow):
     def disable_skyrim_mo2(self) -> None:
         answer = QMessageBox.question(
             self, "Disable Skyrim MO2 configuration",
-            "Move only the STL-Steam-managed Skyrim config to a backup file?\\n\\nUnmanaged files are never removed, and the backup will not be overwritten.",
+            "Move only the legacy STL-managed Skyrim config to a backup file?\\n\\nUnmanaged files are never removed, and the backup will not be overwritten.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -323,7 +323,7 @@ class MainWindow(QMainWindow):
         targets = "\n".join(preview.get("compatibility_targets", [])) or "(No compatibility registration detected)"
         backup = preview.get("backup") or "(No existing app directory)"
         details = (
-            "This will remove only STL-Steam-managed application files and verified Steam compatibility links.\n\n"
+            "This will remove only legacy STL-managed application files and verified Steam compatibility links.\n\n"
             "App source: " + str(preview.get("install_root") or "(Not installed)") + "\n"
             "Backup: " + backup + "\n"
             "Steam compatibility targets: " + targets + "\n\n"
@@ -331,7 +331,7 @@ class MainWindow(QMainWindow):
             "STL user configuration, or Steam launch settings.\n\nContinue?"
         )
         answer = QMessageBox.question(
-            self, "Remove & Reset STL-Steam", details,
+            self, "Remove & Reset legacy STL setup", details,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -344,9 +344,9 @@ class MainWindow(QMainWindow):
             self._append_log("Reset backup: " + result["backup"])
         if result.get("ok"):
             note = "\n\nExit and restart Steam to refresh its compatibility-tool list." if result.get("restart_steam") else ""
-            QMessageBox.information(self, "Remove & Reset STL-Steam", result.get("message", "Reset complete.") + note)
+            QMessageBox.information(self, "Remove & Reset legacy STL setup", result.get("message", "Reset complete.") + note)
         else:
-            QMessageBox.warning(self, "Remove & Reset STL-Steam", result.get("message", "Reset stopped.") + "\n\nPersonal game/MO2 data was not intentionally modified.")
+            QMessageBox.warning(self, "Remove & Reset legacy STL setup", result.get("message", "Reset stopped.") + "\n\nPersonal game/MO2 data was not intentionally modified.")
         self.refresh_stl()
 
     def install_stl_steam_bootstrap(self) -> None:
@@ -356,8 +356,8 @@ class MainWindow(QMainWindow):
             self._append_log("Legacy STL bootstrap script missing: " + str(script))
             return
         answer = QMessageBox.question(
-            self, "Install STL-Steam",
-            "Run the bundled project installer to detect Steam and Skyrim SE, then download this STL-Steam project into your user-local data directory.\\n\\n"
+            self, "Install legacy STL compatibility layer",
+            "Run the bundled legacy installer to detect Steam and Skyrim SE, then download its source into your user-local data directory.\\n\\n"
             "This does not change Steam launch options, Skyrim files, saves, mods, or existing MO2 instances.\\n\\nContinue?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
@@ -366,7 +366,7 @@ class MainWindow(QMainWindow):
             self._append_log("Legacy STL bootstrap cancelled.")
             return
         if getattr(self, "bootstrap_process", None) and self.bootstrap_process.state() != QProcess.ProcessState.NotRunning:
-            QMessageBox.information(self, "Install STL-Steam", "The installer is already running.")
+            QMessageBox.information(self, "Install legacy STL compatibility layer", "The installer is already running.")
             return
         self.bootstrap_process = QProcess(self)
         self.bootstrap_process.setProgram("bash")
@@ -381,7 +381,7 @@ class MainWindow(QMainWindow):
         if not self.bootstrap_process.waitForStarted(3000):
             self.bootstrap_status.setText("Installer could not start.")
             self._append_log("Legacy STL bootstrap failed to start: " + self.bootstrap_process.errorString())
-            QMessageBox.warning(self, "Install STL-Steam", "Could not start the installer.\\n" + self.bootstrap_process.errorString())
+            QMessageBox.warning(self, "Install legacy STL compatibility layer", "Could not start the installer.\\n" + self.bootstrap_process.errorString())
 
     def _read_bootstrap_output(self) -> None:
         process = getattr(self, "bootstrap_process", None)
@@ -398,10 +398,10 @@ class MainWindow(QMainWindow):
         self._read_bootstrap_output()
         if exit_code == 0:
             self.bootstrap_status.setText("Legacy STL compatibility installer completed successfully.")
-            QMessageBox.information(self, "Install STL-Steam", "Installer completed successfully. Review Logs for details.")
+            QMessageBox.information(self, "Install legacy STL compatibility layer", "Installer script exited successfully. Review Logs for details. Review Logs for details.")
         else:
             self.bootstrap_status.setText(f"Legacy STL compatibility installer failed (exit code {exit_code}).")
-            QMessageBox.warning(self, "Install STL-Steam", f"Installer failed with exit code {exit_code}.\\nOpen Logs for the exact error and next step.")
+            QMessageBox.warning(self, "Install legacy STL compatibility layer", f"Installer failed with exit code {exit_code}.\\nOpen Logs for the exact error and next step.")
         self._append_log(f"Legacy STL bootstrap exited with code {exit_code}.")
         self.refresh_detection()
         self.refresh_stl()
