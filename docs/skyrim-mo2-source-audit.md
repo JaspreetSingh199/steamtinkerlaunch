@@ -74,3 +74,10 @@ The standalone installer should not invoke MO2 installation itself or make a gam
 - The shipped `misc/mo2games.txt` includes `Skyrim Special Edition` with Steam AppID `489830` and internal instance name `skyrimspecialedition`.
 - The game-specific instance lookup uses that metadata; therefore Skyrim SE is not an unsupported MO2 target in this STL source snapshot.
 - The list also includes Skyrim LE (AppID `72850`) and Skyrim VR (AppID `611670`), but the installer scope remains SE only.
+
+## Default MO2 behavior found
+
+- Game config defaults `MO2MODE` to `disabled` when unset.
+- `checkMO2` is called in the normal game-launch sequence. It returns immediately when MO2 is disabled, otherwise it can offer GUI/silent/cancel selection using `WAITMO2` and then calls `prepareMO2` with the detected AppID.
+- `WAITMO2` defaults to `2`, but it only matters when MO2 mode is enabled.
+- Consequently, simply installing STL-Steam will not enable MO2 for Skyrim by default. A future integration step must create or safely update the Skyrim-specific STL config, or provide an explicit post-install setup path; it must not blindly change existing game configs.
