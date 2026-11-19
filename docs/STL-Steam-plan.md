@@ -43,6 +43,9 @@ Detection should inspect Steam library manifests rather than assume a single Ste
 
 - Fork: `JaspreetSingh199/steamtinkerlaunch`
 - Working branch: `stl-steam`
-- The installer prototype and integration tests are committed. Detection-only tests cover missing Steam, missing Skyrim, default library, and alternate library. Install-path tests are added using a mocked archive/curl fixture; they still need local execution against the exact committed files before being considered verified.
-- Installer is dry-run by default, and installation uses a staging directory before moving into the final user-local path.
-- Launch integration, MO2 configuration, and runtime validation remain unimplemented.
+- Installer prototype is committed and CI-tested with mocked fixtures. Coverage includes missing Steam, missing Skyrim, default library, alternate library, Flatpak Steam, staged install layout, local PREFIX configuration, and refusal to overwrite.
+- CI performs Bash syntax checks and integration tests on pushes to `stl-steam`.
+- Installer is dry-run by default and uses a staging directory before final placement.
+- Source audit confirmed Skyrim SE is supported by STL's MO2 metadata (AppID 489830).
+- Source audit confirmed MO2 is disabled by default unless game config enables it; normal launch calls `checkMO2`, which can set up MO2 when enabled.
+- Steam launch-option integration and safe game-config setup are not yet implemented; runtime validation remains pending.
