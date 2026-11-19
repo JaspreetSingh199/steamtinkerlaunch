@@ -37,6 +37,24 @@ class MO2SetupTests(unittest.TestCase):
             self.assertFalse(result["ok"])
             self.assertEqual(exe.read_bytes(), b"preserve")
 
+    def test_mo2_install_starts_visible_process_without_capturing_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            stl = home / ".local/share/stl-steam/bin/steamtinkerlaunch"
+            stl.parent.mkdir(parents=True)
+            stl.write_text("#!/bin/sh\\n")
+            stl.chmod(0o755)
+            with patch("mo2_setup.subprocess.Popen") as popen:
+                popen.return_value.pid = 4321
+                result = run_mo2_command("install", home, dry_run=False)
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["pid"], 4321)
+            kwargs = popen.call_args.kwargs
+            self.assertIsNone(kwargs["stdout"])
+            self.assertIsNone(kwargs["stderr"])
+            self.assertIsNone(kwargs["stdin"])
+            self.assertTrue(kwargs["start_new_session"])
+
     def test_mo2_install_reports_unverified_when_executable_not_found(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
