@@ -45,3 +45,25 @@ MO2 integration is still being traced. Do not treat this bootstrap as a complete
 Skyrim modding setup until a verified launch/configuration path is implemented
 and tested. The next milestone is an explicit, reversible Skyrim setup step that
 does not overwrite an existing per-game STL config.
+
+## Qt6 desktop frontend (early working milestone)
+
+The Qt frontend currently performs read-only Skyrim SE detection. It does not install
+STL-Steam, configure MO2, or change Steam launch options yet.
+
+Run from the repository checkout:
+
+```bash
+bash qt-ui/run.sh
+```
+
+The launcher creates a local Python virtual environment in `qt-ui/.venv` and installs
+PySide6 only if it is missing. For a menu entry, run:
+
+
+```bash
+bash qt-ui/install-desktop-launcher.sh
+```
+
+Then search your desktop application menu for **STL-Steam Skyrim Setup**.
+
