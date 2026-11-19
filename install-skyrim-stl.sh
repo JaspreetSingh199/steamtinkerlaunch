@@ -114,7 +114,7 @@ fi
 install_parent="$(dirname "$INSTALL_ROOT")"
 mkdir -p "$install_parent"
 staging_dir="$(mktemp -d "$install_parent/.stl-steam-staging.XXXXXX")"
-cleanup() { rm -rf "$tmpdir" "$staging_dir"; }
+cleanup() { rm -rf "$tmpdir"; [[ -z "$staging_dir" ]] || rm -rf "$staging_dir"; }
 trap cleanup EXIT
 
 cp -a "$source_dir/." "$staging_dir/"
