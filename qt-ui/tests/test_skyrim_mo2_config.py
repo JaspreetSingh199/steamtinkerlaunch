@@ -18,7 +18,7 @@ class SkyrimMO2ConfigTests(unittest.TestCase):
     def test_config_path_matches_stl_runtime_resolver(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
-            expected = home / ".config/steamtinkerlaunch/gamecfgs/id/489830.conf"
+            expected = Path(os.environ["XDG_CONFIG_HOME"]) / "steamtinkerlaunch/gamecfgs/id/489830.conf"
             self.assertEqual(skyrim_game_config_path(home), expected)
 
     def test_dry_run_does_not_create_config_or_directories(self):
