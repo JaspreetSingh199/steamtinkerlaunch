@@ -342,6 +342,12 @@ def install_mo2_environment(proton_path: Path, game_path: Path,
                 }
             return {"ok": True, "already_installed": True, **state}
         raise RuntimeError(f"MO2 install target already exists but is not a verified Wyrd installation: {install_dir}. It was left untouched.")
+    # Ownership checks must finish before network access or any extraction begins.
+    if prefix_root.exists() and not (prefix_root / ".wyrd-managed.json").is_file():
+        raise RuntimeError(
+            f"The intended MO2 prefix already exists but is not marked as Wyrd-managed: {prefix_root}. "
+            "It was left untouched."
+        )
     if callback:
         callback(5, "Checking the official MO2 release…")
     version, archive_name, url = _latest_mo2_archive()
