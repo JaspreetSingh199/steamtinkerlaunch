@@ -272,8 +272,9 @@ def inspect_skyrim_mo2_config(home: Path | None = None, app_id: str = "489830") 
         return {"exists": True, "path": str(path), "error": str(error), "managed": False}
     import re
     match = re.search(r'^\s*MO2MODE\s*=\s*"([^"]*)"', text, re.MULTILINE)
+    managed = text.startswith("# Managed by STL-Steam.")
     return {"exists": True, "path": str(path),
-            "mo2_mode": match.group(1) if match else None, "managed": False}
+            "mo2_mode": match.group(1) if match else None, "managed": managed}
 
 
 def configure_skyrim_mo2(home: Path | None = None, *, dry_run: bool = True,
