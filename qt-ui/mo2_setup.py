@@ -94,9 +94,42 @@ def run_mo2_command(command: str, home: Path | None = None, *, dry_run: bool = T
         return {"ok": True, "dry_run": True,
                 "message": f"Ready to start STL's visible MO2 {command} window.",
                 "command": command_line}
+    environment = os.environ.copy()
+    yad = shutil.which("yad")
+    if yad:
+        try:
+            version_text = subprocess.run([yad, "--version"], capture_output=True, text=True, timeout=3).stdout.strip()
+            major = int(version_text.split(".", 1)[0])
+        except (OSError, subprocess.SubprocessError, ValueError, IndexError):
+            major = 0
+        if major >= 15:
+            # YAD 15 removed two obsolete flags still passed by older upstream STL.
+            # A private PATH shim filters only those no-op flags; it does not
+            # modify system YAD or the STL installation.
+            shim_dir = home / ".cache/stl-steam/yad-compat/bin"
+            shim = shim_dir / "yad"
+            real_yad = Path(yad).resolve()
+            script = ("#!/bin/sh\\n"
+                     "set --\\n"
+                     "while [ $# -gt 0 ]; do\\n"
+                     "  case \\"$1\\" in --decorated|--image-on-top) shift ;;\\n"
+                     "  *) set -- \\"$@\\" ;;\\n"
+                     "  esac\\n"
+                     "done\\n"
+                     "exec " + str(real_yad) + " \\"$@\\"\\n")
+            try:
+                shim_dir.mkdir(parents=True, exist_ok=True)
+                staged = shim.with_suffix(".tmp")
+                staged.write_text(script, encoding="utf-8")
+                staged.chmod(0o755)
+                os.replace(staged, shim)
+                environment["PATH"] = str(shim_dir) + os.pathsep + environment.get("PATH", "")
+            except OSError as error:
+                return {"ok": False, "dry_run": False,
+                        "message": f"Could not prepare YAD 15 compatibility wrapper: {error}. MO2 was not started."}
     try:
         process = subprocess.Popen(command_line, stdin=None, stdout=None, stderr=None,
-                                   start_new_session=True)
+                                   start_new_session=True, env=environment)
     except OSError as error:
         return {"ok": False, "dry_run": False,
                 "message": f"Could not start STL's MO2 {command} process: {error}",
