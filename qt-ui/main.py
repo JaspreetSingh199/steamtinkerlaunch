@@ -1,510 +1,330 @@
 #!/usr/bin/env python3
-"""Qt 6 desktop shell for Wyrd, the Skyrim modding environment manager."""
+"""Qt 6 desktop application for Wyrd's Skyrim + Mod Organizer 2 workflow."""
 from __future__ import annotations
 
 import sys
 from pathlib import Path
-from PySide6.QtCore import QProcess
+
+from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import (
-    QApplication, QFrame, QLabel, QListWidget, QMainWindow, QPushButton,
-    QStackedWidget, QVBoxLayout, QHBoxLayout, QWidget, QPlainTextEdit, QMessageBox,
+    QApplication, QComboBox, QFrame, QHBoxLayout, QLabel, QMainWindow,
+    QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QVBoxLayout,
+    QWidget,
 )
+
 from skyrim_detection import detect_skyrim
-from mo2_inspection import inspect_mo2, inspect_stl_installation
-from stl_compatibility import install_compatibility_tool, inspect_compatibility_tool
-from mo2_setup import run_mo2_command, create_skyrim_mo2_instance, inspect_skyrim_mo2_instance, proton_binary_architecture
-from stl_compatibility import configure_skyrim_mo2, inspect_skyrim_mo2_config, remove_managed_skyrim_mo2_config
+from wyrd_mo2 import (
+    discover_proton_builds, inspect_wyrd_installation,
+    install_mo2_environment, launch_mo2, managed_paths,
+)
 
 STYLE = """
 QWidget { background: #15171b; color: #e5e7eb; font-size: 14px; }
-QListWidget { background: #1d2026; border: 0; padding: 8px; }
-QListWidget::item { padding: 12px; border-radius: 8px; }
-QListWidget::item:selected { background: #2d3748; color: #fff; }
-QFrame#card { background: #20232a; border: 1px solid #343943; border-radius: 12px; }
-QLabel#heading { font-size: 26px; font-weight: 650; }
-QLabel#muted { color: #9ca3af; }
-QPushButton { background: #303744; border: 1px solid #46505f; border-radius: 8px; padding: 10px 16px; }
-QPushButton:hover { background: #3a4555; }
-QPushButton:disabled { color: #8b929c; background: #262a31; }
+QFrame#panel { background: #20232a; border: 1px solid #343943; border-radius: 12px; }
+QLabel#heading { font-size: 27px; font-weight: 650; }
+QLabel#section { font-size: 17px; font-weight: 600; }
+QLabel#muted { color: #a2aab6; }
+QPushButton { background: #354255; border: 1px solid #526176; border-radius: 8px; padding: 11px 17px; }
+QPushButton:hover { background: #40516a; }
+QPushButton:disabled { color: #818995; background: #262a31; }
+QComboBox { background: #252a33; border: 1px solid #414a58; border-radius: 7px; padding: 9px; }
+QProgressBar { background: #252a33; border: 0; border-radius: 5px; height: 12px; text-align: center; }
+QProgressBar::chunk { background: #5b8def; border-radius: 5px; }
+QPlainTextEdit { background: #111318; border: 1px solid #303641; border-radius: 8px; }
 """
 
-def card(title: str, description: str) -> QFrame:
+
+def panel(title: str, description: str) -> QFrame:
     frame = QFrame()
-    frame.setObjectName("card")
+    frame.setObjectName("panel")
     layout = QVBoxLayout(frame)
-    layout.setContentsMargins(16, 16, 16, 16)
-    title_label = QLabel(title)
-    title_label.setStyleSheet("font-size: 17px; font-weight: bold;")
+    layout.setContentsMargins(17, 15, 17, 15)
+    heading = QLabel(title)
+    heading.setObjectName("section")
     detail = QLabel(description)
     detail.setObjectName("muted")
     detail.setWordWrap(True)
-    layout.addWidget(title_label)
+    layout.addWidget(heading)
     layout.addWidget(detail)
+    frame.detail_label = detail
     return frame
+
+
+class InstallWorker(QThread):
+    progress = Signal(int, str)
+    completed = Signal(dict)
+
+    def __init__(self, proton_path: str, game_path: str):
+        super().__init__()
+        self.proton_path = Path(proton_path)
+        self.game_path = Path(game_path)
+
+    def run(self) -> None:
+        try:
+            result = install_mo2_environment(
+                self.proton_path, self.game_path,
+                callback=lambda value, message: self.progress.emit(value, message),
+            )
+        except Exception as error:
+            result = {"ok": False, "message": str(error)}
+        self.completed.emit(result)
+
 
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("Wyrd — Skyrim Modding Environment")
-        self.resize(1050, 680)
+        self.resize(980, 700)
+        self.worker: InstallWorker | None = None
+        self.game_state: dict = {"found": False}
+        self.proton_builds: list[dict] = []
+        self.mo2_state: dict = {"installed": False}
+
         root = QWidget()
-        row = QHBoxLayout(root)
-        row.setContentsMargins(14, 14, 14, 14)
-        row.setSpacing(12)
+        layout = QVBoxLayout(root)
+        layout.setContentsMargins(25, 22, 25, 22)
+        layout.setSpacing(14)
 
-        self.nav = QListWidget()
-        self.nav.setFixedWidth(210)
-        self.nav.addItems(["Overview", "Game Detection", "MO2 Setup", "Compatibility", "Logs"])
-        self.nav.setCurrentRow(0)
-        self.pages = QStackedWidget()
-        self.overview_page = self.overview()
-        self.detection_page = self.detection()
-        self.pages.addWidget(self.overview_page)
-        self.pages.addWidget(self.detection_page)
-        self.mo2_page = self.mo2_setup()
-        self.compatibility_page = self.compatibility()
-        self.logs_page = self.logs()
-        self.pages.addWidget(self.mo2_page)
-        self.pages.addWidget(self.compatibility_page)
-        self.pages.addWidget(self.logs_page)
-        self.nav.currentRowChanged.connect(self.pages.setCurrentIndex)
-        row.addWidget(self.nav)
-        row.addWidget(self.pages, 1)
-        self.setCentralWidget(root)
-        self.refresh_detection()
-        self.refresh_mo2()
-        self.refresh_stl()
-        self.refresh_skyrim_mo2_config()
-        self.refresh_skyrim_instance()
-
-    def overview(self) -> QWidget:
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        heading = QLabel("Skyrim Setup")
+        heading = QLabel("Wyrd")
         heading.setObjectName("heading")
-        subtitle = QLabel("A guided, reversible Linux Skyrim modding setup")
+        subtitle = QLabel("A focused Skyrim Special Edition + Mod Organizer 2 setup for Linux")
         subtitle.setObjectName("muted")
         layout.addWidget(heading)
         layout.addWidget(subtitle)
-        layout.addSpacing(12)
-        self.game_summary = card("Skyrim detection", "Checking Steam libraries…")
-        layout.addWidget(self.game_summary)
-        layout.addWidget(card("Wyrd", "Kalium-inspired foundation planned. Legacy STL compatibility setup remains available during the transition."))
-        layout.addWidget(card("Mod Organizer 2", "Existing MO2 installations and instances will be preserved."))
-        layout.addStretch(1)
-        note = QLabel("Read-only detection is enabled. Steam launch options and the game prefix are not modified.")
-        note.setObjectName("muted")
-        note.setWordWrap(True)
-        layout.addWidget(note)
-        return page
 
-    def detection(self) -> QWidget:
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        heading = QLabel("Game Detection")
-        heading.setObjectName("heading")
-        explanation = QLabel("Searches Steam's standard locations and libraryfolders.vdf. This is read-only.")
-        explanation.setObjectName("muted")
-        explanation.setWordWrap(True)
-        layout.addWidget(heading)
-        layout.addWidget(explanation)
-        self.detect_result = card("Status", "Checking…")
-        layout.addWidget(self.detect_result)
-        refresh = QPushButton("Refresh detection")
-        refresh.clicked.connect(self.refresh_detection)
-        layout.addWidget(refresh)
-        layout.addStretch(1)
-        return page
+        self.game_panel = panel("1. Skyrim Special Edition", "Detecting Steam libraries…")
+        layout.addWidget(self.game_panel)
 
-    def mo2_setup(self) -> QWidget:
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        heading = QLabel("MO2 Setup")
-        heading.setObjectName("heading")
-        intro = QLabel("Manage MO2 as a separate application in a dedicated Proton environment. Existing game files, prefixes, profiles, mods and downloads are never reset by this tool.")
-        intro.setObjectName("muted")
-        intro.setWordWrap(True)
-        layout.addWidget(heading)
-        layout.addWidget(intro)
-        self.mo2_result = card("Mod Organizer 2", "Checking known locations…")
-        layout.addWidget(self.mo2_result)
-        refresh = QPushButton("Refresh MO2 detection")
-        refresh.clicked.connect(self.refresh_mo2)
-        layout.addWidget(refresh)
-        install = QPushButton("Install MO2 (STL-managed)")
-        install.clicked.connect(lambda: self.run_mo2_action("install"))
-        layout.addWidget(install)
-        start = QPushButton("Start MO2 standalone")
-        start.clicked.connect(lambda: self.run_mo2_action("start"))
-        layout.addWidget(start)
-        configure = QPushButton("Enable MO2 for Skyrim SE")
-        configure.clicked.connect(self.enable_skyrim_mo2)
-        layout.addWidget(configure)
-        disable = QPushButton("Disable managed Skyrim MO2 config")
-        disable.clicked.connect(self.disable_skyrim_mo2)
-        layout.addWidget(disable)
-        instance = QPushButton("Create Skyrim SE MO2 instance")
-        instance.clicked.connect(self.create_skyrim_instance)
-        layout.addWidget(instance)
-        verify_instance = QPushButton("Check Skyrim MO2 instance")
-        verify_instance.clicked.connect(self.refresh_skyrim_instance)
-        layout.addWidget(verify_instance)
-        self.instance_status = QLabel("Skyrim instance status not checked yet.")
-        self.instance_status.setObjectName("muted")
-        self.instance_status.setWordWrap(True)
-        layout.addWidget(self.instance_status)
-        self.skyrim_mo2_status = QLabel("Checking Skyrim per-game MO2 configuration…")
-        self.skyrim_mo2_status.setObjectName("muted")
-        self.skyrim_mo2_status.setWordWrap(True)
-        layout.addWidget(self.skyrim_mo2_status)
-        layout.addStretch(1)
-        return page
+        runtime_panel = QFrame()
+        runtime_panel.setObjectName("panel")
+        runtime_layout = QVBoxLayout(runtime_panel)
+        runtime_layout.setContentsMargins(17, 15, 17, 15)
+        runtime_heading = QLabel("2. Proton runtime")
+        runtime_heading.setObjectName("section")
+        runtime_detail = QLabel("Wyrd uses a compatible Proton build to run MO2 in its own isolated prefix.")
+        runtime_detail.setObjectName("muted")
+        runtime_detail.setWordWrap(True)
+        runtime_layout.addWidget(runtime_heading)
+        runtime_layout.addWidget(runtime_detail)
+        runtime_row = QHBoxLayout()
+        self.proton_combo = QComboBox()
+        self.proton_combo.setMinimumWidth(420)
+        self.refresh_button = QPushButton("Refresh detection")
+        self.refresh_button.clicked.connect(self.refresh_all)
+        runtime_row.addWidget(self.proton_combo, 1)
+        runtime_row.addWidget(self.refresh_button)
+        runtime_layout.addLayout(runtime_row)
+        self.runtime_status = QLabel("Looking for Proton…")
+        self.runtime_status.setObjectName("muted")
+        runtime_layout.addWidget(self.runtime_status)
+        layout.addWidget(runtime_panel)
 
-    def refresh_mo2(self) -> None:
-        result = inspect_mo2()
-        if result["found"]:
-            detail = "Existing installation(s):\n" + "\n".join(result["installations"]) + "\n\nNo changes made."
-            status = "MO2 installation found"
-        else:
-            detail = "No MO2 installation found in the common locations.\n\nNo folders were created and no existing data was changed."
-            status = "MO2 not detected"
-        self.mo2_result = self._replace_card(self.mo2_page, self.mo2_result, card(status, detail))
-        self._append_log("MO2 discovery: " + status + " (common paths only; STL MO2COMPDATA may be customized)")
+        self.mo2_panel = panel("3. Mod Organizer 2", "Checking Wyrd's managed installation…")
+        layout.addWidget(self.mo2_panel)
 
-    def refresh_skyrim_instance(self) -> None:
-        result = inspect_skyrim_mo2_instance()
-        self.instance_status.setText(result.get("message", "Could not inspect instance.") + ("\\n" + result.get("output", "") if result.get("output") else ""))
-        self._append_log("Skyrim MO2 instance check: " + result.get("message", "unknown"))
+        action_row = QHBoxLayout()
+        self.install_button = QPushButton("Install MO2")
+        self.install_button.clicked.connect(self.install_mo2)
+        self.launch_button = QPushButton("Launch MO2")
+        self.launch_button.clicked.connect(self.start_mo2)
+        self.launch_button.setEnabled(False)
+        action_row.addWidget(self.install_button)
+        action_row.addWidget(self.launch_button)
+        action_row.addStretch(1)
+        layout.addLayout(action_row)
 
-    def create_skyrim_instance(self) -> None:
-        preview = create_skyrim_mo2_instance(dry_run=True)
-        if not preview.get("ok"):
-            QMessageBox.warning(self, "Skyrim MO2 Instance", preview.get("message", "Preflight failed."))
-            self._append_log("Skyrim instance preflight: " + preview.get("message", ""))
-            return
-        answer = QMessageBox.question(
-            self, "Create Skyrim SE MO2 instance",
-            "Ask STL to create its supported MO2 instance for Skyrim Special Edition (AppID 489830)?\\n\\n"
-            "STL will use its own configured MO2 prefix and game metadata. An existing Skyrim instance is detected and left untouched. "
-            "No Skyrim files, saves, Steam launch options, or existing mods are copied or overwritten by this app.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
+        self.progress_label = QLabel("Ready")
+        self.progress_label.setObjectName("muted")
+        layout.addWidget(self.progress_label)
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 100)
+        self.progress.setValue(0)
+        layout.addWidget(self.progress)
+
+        instructions = panel(
+            "4. Launch Skyrim from MO2",
+            "On the first MO2 launch, create a new instance and choose “Skyrim Special Edition”. "
+            "Wyrd registers your detected game path only inside its own Proton prefix. "
+            "After the instance is created, select Skyrim or SKSE in MO2's executable dropdown and press Run. "
+            "MO2 then launches the game through its mod virtual filesystem.",
         )
-        if answer != QMessageBox.StandardButton.Yes:
-            self._append_log("Skyrim instance creation cancelled.")
-            return
-        result = create_skyrim_mo2_instance(dry_run=False)
-        self._append_log("Skyrim instance create: " + result.get("message", "unknown"))
-        (QMessageBox.information if result.get("ok") else QMessageBox.warning)(self, "Skyrim MO2 Instance", result.get("message", "Operation failed.") + ("\\n\\n" + result.get("output", "") if result.get("output") else ""))
-        self.refresh_skyrim_instance()
+        layout.addWidget(instructions)
 
-    def refresh_skyrim_mo2_config(self) -> None:
-        state = inspect_skyrim_mo2_config()
-        if state.get("exists"):
-            self.skyrim_mo2_status.setText("Skyrim SE STL MO2 mode: " + str(state.get("mo2_mode") or "not explicitly set") + "\\n" + state["path"])
-        else:
-            self.skyrim_mo2_status.setText("No Skyrim-specific STL MO2 configuration exists. MO2 remains disabled for Skyrim by default.")
-
-    def enable_skyrim_mo2(self) -> None:
-        preview = configure_skyrim_mo2(dry_run=True, mode="gui")
-        if not preview.get("ok"):
-            QMessageBox.warning(self, "Skyrim MO2", preview.get("message", "Preflight failed."))
-            return
-        answer = QMessageBox.question(
-            self, "Enable MO2 for Skyrim SE",
-            "Create a new per-game STL config for AppID 489830 with MO2MODE=gui?\\n\\n"
-            "This does not edit Steam launch options, game files, saves, mods, Proton prefixes, or existing MO2 instances.\\n"
-            "If a per-game config already exists, it will be left untouched. The file can be disabled later from this page.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if answer != QMessageBox.StandardButton.Yes:
-            self._append_log("Skyrim MO2 config creation cancelled.")
-            return
-        result = configure_skyrim_mo2(dry_run=False, mode="gui")
-        self._append_log("Skyrim MO2 config: " + result.get("message", "unknown result"))
-        if result.get("ok"):
-            QMessageBox.information(self, "Skyrim MO2", result["message"] + "\\n\\nRestart Steam before testing the game launch.")
-        else:
-            QMessageBox.warning(self, "Skyrim MO2", result.get("message", "Could not configure MO2."))
-        self.refresh_skyrim_mo2_config()
-
-    def disable_skyrim_mo2(self) -> None:
-        answer = QMessageBox.question(
-            self, "Disable Skyrim MO2 configuration",
-            "Move only the legacy STL-managed Skyrim config to a backup file?\\n\\nUnmanaged files are never removed, and the backup will not be overwritten.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if answer != QMessageBox.StandardButton.Yes:
-            return
-        result = remove_managed_skyrim_mo2_config()
-        self._append_log("Disable Skyrim MO2 config: " + result.get("message", "unknown result"))
-        (QMessageBox.information if result.get("ok") else QMessageBox.warning)(self, "Skyrim MO2", result.get("message", "Operation failed."))
-        self.refresh_skyrim_mo2_config()
-
-    def run_mo2_action(self, command: str) -> None:
-        preview = run_mo2_command(command, dry_run=True)
-        if not preview.get("ok"):
-            QMessageBox.warning(self, "MO2 Setup", preview.get("message", "Preflight failed."))
-            self._append_log("MO2 " + command + " preflight failed: " + preview.get("message", ""))
-            return
-        prompt = ("Install Mod Organizer 2 using STL? This will install into STL's managed MO2 prefix. "
-                  "Detected existing MO2 installs are not overwritten.") if command == "install" else (
-                  "Launch MO2 standalone using STL? This opens MO2 in its own prefix. Create a new instance in MO2 if prompted; "
-                  "the setup app will not copy or migrate existing mods, saves, or profiles.")
-        answer = QMessageBox.question(self, "MO2 " + command.title(), prompt, QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
-        if answer != QMessageBox.StandardButton.Yes:
-            self._append_log("MO2 " + command + " cancelled by user.")
-            return
-        result = run_mo2_command(command, dry_run=False)
-        self._append_log("MO2 " + command + ": " + result.get("message", "unknown result"))
-        if result.get("ok"):
-            message = result.get("message", "Command started.")
-            QMessageBox.information(
-                self, "MO2 Setup",
-                message + "\n\nIMPORTANT: This confirms only that the STL process was started. "
-                "It does NOT mean MO2 has finished installing. If no installer window appears, inspect Logs for the Proton/Wine launch error. "
-                "then click 'Check Skyrim MO2 instance' here. Do not click Install again while the installer is open."
-            )
-        else:
-            QMessageBox.warning(
-                self, "MO2 Setup",
-                result.get("message", "Failed.") + "\n\nYour existing MO2 data has not been removed."
-            )
-        self.refresh_mo2()
-
-    def compatibility(self) -> QWidget:
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        heading = QLabel("Compatibility")
-        heading.setObjectName("heading")
-        intro = QLabel("Install upstream SteamTinkerLaunch into a user-local prefix and register it as a Steam Compatibility Tool. Steam launch settings are not edited.")
-        intro.setObjectName("muted")
-        intro.setWordWrap(True)
-        layout.addWidget(heading)
-        layout.addWidget(intro)
-        self.stl_result = card("SteamTinkerLaunch", "Checking user-local and compatibility-tools locations…")
-        layout.addWidget(self.stl_result)
-        refresh = QPushButton("Refresh STL detection")
-        refresh.clicked.connect(self.refresh_stl)
-        layout.addWidget(refresh)
-        bootstrap = QPushButton("Install legacy STL compatibility layer")
-        bootstrap.clicked.connect(self.install_stl_steam_bootstrap)
-        layout.addWidget(bootstrap)
-        self.bootstrap_status = QLabel("Legacy STL compatibility installer status: idle")
-        self.bootstrap_status.setObjectName("muted")
-        self.bootstrap_status.setWordWrap(True)
-        layout.addWidget(self.bootstrap_status)
-        install = QPushButton("Install as Steam Compatibility Tool")
-        install.clicked.connect(self.install_stl_compatibility)
-        layout.addWidget(install)
-        reset = QPushButton("Remove & Reset legacy STL setup")
-        reset.clicked.connect(self.remove_and_reset_stl)
-        layout.addWidget(reset)
-        self.reset_status = QLabel("Reset backs up legacy STL app files and removes only verified compatibility links. Skyrim, MO2 and Proton data are preserved.")
-        self.reset_status.setObjectName("muted")
-        self.reset_status.setWordWrap(True)
-        layout.addWidget(self.reset_status)
-        self.launch_note = QLabel("Steam launch configuration is not modified by this prototype.")
-        self.launch_note.setObjectName("muted")
-        self.launch_note.setWordWrap(True)
-        layout.addWidget(self.launch_note)
-        layout.addStretch(1)
-        return page
-
-    def remove_and_reset_stl(self) -> None:
-        from stl_compatibility import reset_stl_steam
-        preview = reset_stl_steam(dry_run=True)
-        if not preview.get("ok"):
-            QMessageBox.warning(self, "Remove & Reset legacy STL setup", preview.get("message", "Reset preflight failed."))
-            self._append_log("Reset preflight failed: " + preview.get("message", ""))
-            return
-        targets = "\n".join(preview.get("compatibility_targets", [])) or "(No compatibility registration detected)"
-        backup = preview.get("backup") or "(No existing app directory)"
-        details = (
-            "This will remove only legacy STL-managed application files and verified Steam compatibility links.\n\n"
-            "App source: " + str(preview.get("install_root") or "(Not installed)") + "\n"
-            "Backup: " + backup + "\n"
-            "Steam compatibility targets: " + targets + "\n\n"
-            "It will NOT remove Skyrim, saves, mods, MO2 instances/profiles/downloads, Proton prefixes, "
-            "STL user configuration, or Steam launch settings.\n\nContinue?"
-        )
-        answer = QMessageBox.question(
-            self, "Remove & Reset legacy STL setup", details,
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if answer != QMessageBox.StandardButton.Yes:
-            self._append_log("Remove & Reset cancelled.")
-            return
-        result = reset_stl_steam(dry_run=False)
-        self._append_log("Remove & Reset: " + result.get("message", "unknown result"))
-        if result.get("backup"):
-            self._append_log("Reset backup: " + result["backup"])
-        if result.get("ok"):
-            note = "\n\nExit and restart Steam to refresh its compatibility-tool list." if result.get("restart_steam") else ""
-            QMessageBox.information(self, "Remove & Reset legacy STL setup", result.get("message", "Reset complete.") + note)
-        else:
-            QMessageBox.warning(self, "Remove & Reset legacy STL setup", result.get("message", "Reset stopped.") + "\n\nPersonal game/MO2 data was not intentionally modified.")
-        self.refresh_stl()
-
-    def install_stl_steam_bootstrap(self) -> None:
-        script = Path(__file__).resolve().parent.parent / "install-skyrim-stl.sh"
-        if not script.is_file():
-            QMessageBox.warning(self, "Install legacy STL compatibility layer", "The installer script was not found in the project folder:\\n" + str(script))
-            self._append_log("Legacy STL bootstrap script missing: " + str(script))
-            return
-        answer = QMessageBox.question(
-            self, "Install legacy STL compatibility layer",
-            "Run the bundled legacy installer to detect Steam and Skyrim SE, then download its source into your user-local data directory.\\n\\n"
-            "This does not change Steam launch options, Skyrim files, saves, mods, or existing MO2 instances.\\n\\nContinue?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if answer != QMessageBox.StandardButton.Yes:
-            self._append_log("Legacy STL bootstrap cancelled.")
-            return
-        if getattr(self, "bootstrap_process", None) and self.bootstrap_process.state() != QProcess.ProcessState.NotRunning:
-            QMessageBox.information(self, "Install legacy STL compatibility layer", "The installer is already running.")
-            return
-        self.bootstrap_process = QProcess(self)
-        self.bootstrap_process.setProgram("bash")
-        self.bootstrap_process.setArguments([str(script), "--install"])
-        self.bootstrap_process.setWorkingDirectory(str(script.parent))
-        self.bootstrap_process.readyReadStandardOutput.connect(self._read_bootstrap_output)
-        self.bootstrap_process.readyReadStandardError.connect(self._read_bootstrap_output)
-        self.bootstrap_process.finished.connect(self._bootstrap_finished)
-        self.bootstrap_status.setText("Installing STL-Steam… See Logs for live output.")
-        self._append_log("Starting bundled install-skyrim-stl.sh --install from the Qt UI.")
-        self.bootstrap_process.start()
-        if not self.bootstrap_process.waitForStarted(3000):
-            self.bootstrap_status.setText("Installer could not start.")
-            self._append_log("Legacy STL bootstrap failed to start: " + self.bootstrap_process.errorString())
-            QMessageBox.warning(self, "Install legacy STL compatibility layer", "Could not start the installer.\\n" + self.bootstrap_process.errorString())
-
-    def _read_bootstrap_output(self) -> None:
-        process = getattr(self, "bootstrap_process", None)
-        if not process:
-            return
-        output = bytes(process.readAllStandardOutput()).decode(errors="replace")
-        errors = bytes(process.readAllStandardError()).decode(errors="replace")
-        if output.strip():
-            self._append_log(output.rstrip())
-        if errors.strip():
-            self._append_log(errors.rstrip())
-
-    def _bootstrap_finished(self, exit_code: int, exit_status) -> None:
-        self._read_bootstrap_output()
-        if exit_code == 0:
-            self.bootstrap_status.setText("Legacy STL compatibility installer completed successfully.")
-            QMessageBox.information(self, "Install legacy STL compatibility layer", "Installer script exited successfully. Review Logs for details. Review Logs for details.")
-        else:
-            self.bootstrap_status.setText(f"Legacy STL compatibility installer failed (exit code {exit_code}).")
-            QMessageBox.warning(self, "Install legacy STL compatibility layer", f"Installer failed with exit code {exit_code}.\\nOpen Logs for the exact error and next step.")
-        self._append_log(f"Legacy STL bootstrap exited with code {exit_code}.")
-        self.refresh_detection()
-        self.refresh_stl()
-
-    def refresh_stl(self) -> None:
-        result = inspect_stl_installation()
-        if result["installed"]:
-            detail = "Executable(s):\n" + "\n".join(result["executables"])
-            detail += "\n\nCompatibility-tool directory detected: " + ("Yes" if result["compatibility_tool_present"] else "No")
-            status = "STL executable detected"
-        else:
-            detail = "No executable found in the user-local install, PATH, or common compatibility-tools directories."
-            status = "STL not detected"
-        self.stl_result = self._replace_card(self.compatibility_page, self.stl_result, card(status, detail))
-        self._append_log("STL detection: " + status)
-        compat = inspect_compatibility_tool()
-        self._append_log("Steam compatibility tool: " + ("installed" if compat["installed"] else "not installed"))
-
-    def install_stl_compatibility(self) -> None:
-        preview = install_compatibility_tool(dry_run=True)
-        if not preview.get("ok"):
-            QMessageBox.warning(self, "STL compatibility tool", preview.get("message", "Preflight failed."))
-            self._append_log("STL compatibility install preflight failed: " + preview.get("message", ""))
-            return
-        targets = "\n".join(preview.get("targets", []))
-        answer = QMessageBox.question(
-            self,
-            "Install STL Compatibility Tool",
-            "If STL is missing, it will be cloned into ~/stl/prefix. Then the upstream `compat add` command registers it with Steam.\n\n"
-            "It will create a Steam compatibility-tool entry and will not change Skyrim, saves, mods, or MO2 instances.\n\n"
-            "Target(s):\n" + targets + "\n\nProceed?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if answer != QMessageBox.StandardButton.Yes:
-            self._append_log("STL compatibility installation cancelled by user.")
-            return
-        result = install_compatibility_tool(dry_run=False)
-        self._append_log("STL compatibility install: " + result.get("message", "unknown result"))
-        if result.get("ok"):
-            QMessageBox.information(self, "STL Compatibility Tool", result.get("message", "Installed.") + "\n\nRestart Steam to make it discover the tool.")
-        else:
-            details = result.get("output", "")
-            QMessageBox.warning(self, "STL Compatibility Tool", result.get("message", "Installation failed.") + ("\n\n" + details if details else ""))
-        self.refresh_stl()
-
-    def logs(self) -> QWidget:
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        heading = QLabel("Logs")
-        heading.setObjectName("heading")
-        intro = QLabel("Session diagnostics from read-only inspection. No external log files are collected yet.")
-        intro.setObjectName("muted")
-        intro.setWordWrap(True)
-        layout.addWidget(heading)
-        layout.addWidget(intro)
+        logs_heading = QLabel("Setup log")
+        logs_heading.setObjectName("section")
+        layout.addWidget(logs_heading)
         self.log_view = QPlainTextEdit()
         self.log_view.setReadOnly(True)
-        self.log_view.setPlaceholderText("Run a detection refresh to populate diagnostics.")
-        self.log_view.setMaximumBlockCount(500)
+        self.log_view.setMaximumBlockCount(400)
+        self.log_view.setPlaceholderText("Detection and installation progress will appear here.")
         layout.addWidget(self.log_view, 1)
-        return page
 
-    def refresh_detection(self) -> None:
-        result = detect_skyrim()
-        if result.get("found"):
-            detail = "Detected at:\n" + result["game_dir"] + "\n\nSteam root: " + result["steam_root"]
-            status = "Skyrim Special Edition detected"
+        self.setCentralWidget(root)
+        self.refresh_all()
+
+    def _log(self, message: str) -> None:
+        self.log_view.appendPlainText(message)
+
+    def refresh_all(self) -> None:
+        selected = self.proton_combo.currentData()
+        self.game_state = detect_skyrim()
+        if self.game_state.get("found"):
+            game_path = self.game_state["game_dir"]
+            self.game_panel.detail_label.setText(
+                "Detected:\n" + game_path +
+                "\nSteam library: " + self.game_state.get("library", "detected")
+            )
+            self._log("Skyrim SE detected: " + game_path)
         else:
-            roots = result.get("steam_roots", [])
-            detail = "Skyrim SE (AppID 489830) was not found.\n\nSteam roots checked:\n" + ("\n".join(roots) if roots else "No standard Steam installation found.")
-            status = "Skyrim not detected"
-        self.detect_result = self._replace_card(self.detection_page, self.detect_result, card(status, detail))
-        self.game_summary = self._replace_card(self.overview_page, self.game_summary, card(status, detail))
-        self._append_log("Game detection: " + status + (" — " + result["game_dir"] if result.get("found") else ""))
+            roots = self.game_state.get("steam_roots", [])
+            self.game_panel.detail_label.setText(
+                "Skyrim Special Edition (AppID 489830) was not found. "
+                "Install it through Steam and refresh detection.\nSteam roots checked: " +
+                (", ".join(roots) if roots else "No Steam library detected.")
+            )
+            self._log("Skyrim SE not detected.")
 
-    def _append_log(self, message: str) -> None:
-        if hasattr(self, "log_view"):
-            self.log_view.appendPlainText(message)
+        self.proton_builds = discover_proton_builds()
+        self.proton_combo.clear()
+        selected_index = -1
+        for build in self.proton_builds:
+            label = f'{build["name"]} ({build["architecture"]})'
+            self.proton_combo.addItem(label, build["path"])
+            self.proton_combo.setItemData(self.proton_combo.count() - 1, build["path"], 3)
+            if selected and selected == build["path"]:
+                selected_index = self.proton_combo.count() - 1
+        if selected_index >= 0:
+            self.proton_combo.setCurrentIndex(selected_index)
+        if self.proton_builds:
+            self.runtime_status.setText(
+                f'{len(self.proton_builds)} compatible Proton build(s) found. '
+                "The selected runtime will be saved with this Wyrd installation."
+            )
+            self._log("Proton discovery: " + ", ".join(item["name"] for item in self.proton_builds))
+        else:
+            self.runtime_status.setText(
+                "No compatible Proton build found. Install a current x86_64 Proton build through Steam or ProtonUp-Qt, then refresh."
+            )
+            self._log("No compatible Proton builds found.")
 
-    @staticmethod
-    def _replace_card(page: QWidget, old: QFrame, new: QFrame) -> QFrame:
-        layout = page.layout()
-        index = layout.indexOf(old)
-        if index >= 0:
-            layout.removeWidget(old)
-            old.deleteLater()
-            layout.insertWidget(index, new)
-        return new
+        self.mo2_state = inspect_wyrd_installation()
+        if self.mo2_state.get("installed"):
+            version = self.mo2_state.get("metadata", {}).get("version", "unknown version")
+            prefix = "ready" if self.mo2_state.get("prefix_ready") else "incomplete"
+            self.mo2_panel.detail_label.setText(
+                f"MO2 {version} is installed and verified.\n"
+                f'Executable: {self.mo2_state.get("executable")}\n'
+                f'Wyrd Proton prefix: {prefix}'
+            )
+            self.launch_button.setEnabled(bool(self.mo2_state.get("prefix_ready")))
+            self.install_button.setText("Recheck MO2")
+            self._log("Wyrd MO2 inspection: verified " + version)
+        else:
+            external = self.mo2_state.get("external_installations", [])
+            description = self.mo2_state.get("message", "MO2 is not installed.")
+            if external:
+                description += "\nExisting installation(s):\n" + "\n".join(external)
+                description += "\nThese copies are left untouched; Wyrd installs into its own managed location."
+            self.mo2_panel.detail_label.setText(description)
+            self.launch_button.setEnabled(False)
+            self.install_button.setText("Install MO2")
+            self._log("Wyrd MO2 inspection: " + description)
 
-    @staticmethod
-    def placeholder(title: str, text: str) -> QWidget:
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        label = QLabel(title)
-        label.setObjectName("heading")
-        description = QLabel(text)
-        description.setObjectName("muted")
-        description.setWordWrap(True)
-        layout.addWidget(label)
-        layout.addWidget(description)
-        layout.addStretch(1)
-        return page
+        ready = bool(self.game_state.get("found") and self.proton_builds)
+        self.install_button.setEnabled(ready and not (self.worker and self.worker.isRunning()))
+        self.proton_combo.setEnabled(bool(self.proton_builds) and not (self.worker and self.worker.isRunning()))
+
+    def install_mo2(self) -> None:
+        if self.worker and self.worker.isRunning():
+            return
+        if not self.game_state.get("found"):
+            QMessageBox.warning(self, "Wyrd setup", "Skyrim Special Edition was not detected. Install it through Steam, then refresh.")
+            return
+        proton_path = self.proton_combo.currentData()
+        if not proton_path:
+            QMessageBox.warning(self, "Wyrd setup", "No compatible Proton build is selected.")
+            return
+        if self.mo2_state.get("installed"):
+            self.start_mo2()
+            return
+        answer = QMessageBox.question(
+            self, "Install Mod Organizer 2",
+            "Wyrd will download the official MO2 release, install it into a Wyrd-managed folder, "
+            "and initialize a separate Proton prefix for MO2.\n\n"
+            "Your Skyrim files, Steam prefix, saves, and any existing MO2 installation will not be modified.\n\nContinue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        game_path = self.game_state["game_dir"]
+        self.worker = InstallWorker(str(proton_path), str(game_path))
+        self.worker.progress.connect(self._on_install_progress)
+        self.worker.completed.connect(self._on_install_completed)
+        self.install_button.setEnabled(False)
+        self.launch_button.setEnabled(False)
+        self.refresh_button.setEnabled(False)
+        self.proton_combo.setEnabled(False)
+        self.progress.setValue(0)
+        self.progress_label.setText("Starting MO2 setup…")
+        self._log("Starting Wyrd-owned MO2 installation.")
+        self.worker.start()
+
+    def _on_install_progress(self, value: int, message: str) -> None:
+        self.progress.setValue(value)
+        self.progress_label.setText(message)
+        self._log(message)
+
+    def _on_install_completed(self, result: dict) -> None:
+        if result.get("ok"):
+            self.progress.setValue(100)
+            self.progress_label.setText("MO2 installed and verified.")
+            self._log(result.get("message", "MO2 setup completed."))
+            QMessageBox.information(
+                self, "Wyrd setup complete",
+                result.get("message", "MO2 is ready.") +
+                "\n\nPress Launch MO2. On first launch, create a Skyrim Special Edition instance in MO2."
+            )
+        else:
+            self.progress_label.setText("Setup stopped. Review the log for details.")
+            self._log("MO2 setup failed: " + result.get("message", "Unknown error"))
+            QMessageBox.warning(self, "Wyrd setup failed", result.get("message", "MO2 setup failed."))
+        self.refresh_button.setEnabled(True)
+        self.refresh_all()
+
+    def _has_instance(self) -> bool:
+        prefix = managed_paths()["prefix"] / "pfx/drive_c/users/steamuser/AppData/Local/ModOrganizer/instances"
+        try:
+            return any((entry / "ModOrganizer.ini").is_file() for entry in prefix.iterdir() if entry.is_dir())
+        except OSError:
+            return False
+
+    def start_mo2(self) -> None:
+        first_run = not self._has_instance()
+        result = launch_mo2(pick_instance=first_run)
+        self._log(result.get("message", "MO2 launch failed."))
+        if result.get("ok"):
+            self.progress_label.setText("MO2 launched through Proton.")
+            if first_run:
+                QMessageBox.information(
+                    self, "First MO2 launch",
+                    "MO2 has been opened in its instance picker.\n\n"
+                    "Create a new instance and select Skyrim Special Edition. "
+                    "Then choose Skyrim or SKSE in MO2's executable dropdown and press Run."
+                )
+        else:
+            QMessageBox.warning(self, "Launch MO2", result.get("message", "Could not launch MO2."))
+
+    def closeEvent(self, event) -> None:
+        if self.worker and self.worker.isRunning():
+            QMessageBox.information(
+                self, "Setup is running",
+                "MO2 installation is still running. Wait for it to finish before closing Wyrd."
+            )
+            event.ignore()
+            return
+        event.accept()
+
 
 def main() -> int:
     app = QApplication(sys.argv)
@@ -513,6 +333,7 @@ def main() -> int:
     window = MainWindow()
     window.show()
     return app.exec()
+
 
 if __name__ == "__main__":
     raise SystemExit(main())
