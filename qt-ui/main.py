@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Qt 6 desktop shell for STL-Steam's Skyrim setup."""
+"""Qt 6 desktop shell for Wyrd, the Skyrim modding environment manager."""
 from __future__ import annotations
 
 import sys
@@ -45,7 +45,7 @@ def card(title: str, description: str) -> QFrame:
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("STL-Steam — Skyrim Setup")
+        self.setWindowTitle("Wyrd — Skyrim Modding Environment")
         self.resize(1050, 680)
         root = QWidget()
         row = QHBoxLayout(root)
@@ -82,14 +82,14 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(page)
         heading = QLabel("Skyrim Setup")
         heading.setObjectName("heading")
-        subtitle = QLabel("A guided, reversible STL-Steam setup")
+        subtitle = QLabel("A guided, reversible Linux Skyrim modding setup")
         subtitle.setObjectName("muted")
         layout.addWidget(heading)
         layout.addWidget(subtitle)
         layout.addSpacing(12)
         self.game_summary = card("Skyrim detection", "Checking Steam libraries…")
         layout.addWidget(self.game_summary)
-        layout.addWidget(card("STL-Steam", "The installer will be staged and verified before setup actions are enabled."))
+        layout.addWidget(card("Wyrd", "Kalium-inspired foundation planned. Legacy STL compatibility setup remains available during the transition."))
         layout.addWidget(card("Mod Organizer 2", "Existing MO2 installations and instances will be preserved."))
         layout.addStretch(1)
         note = QLabel("Read-only detection is enabled. Steam launch options and the game prefix are not modified.")
@@ -289,20 +289,20 @@ class MainWindow(QMainWindow):
         refresh = QPushButton("Refresh STL detection")
         refresh.clicked.connect(self.refresh_stl)
         layout.addWidget(refresh)
-        bootstrap = QPushButton("Install STL-Steam")
+        bootstrap = QPushButton("Install legacy STL compatibility layer")
         bootstrap.clicked.connect(self.install_stl_steam_bootstrap)
         layout.addWidget(bootstrap)
-        self.bootstrap_status = QLabel("STL-Steam application installer status: idle")
+        self.bootstrap_status = QLabel("Legacy STL compatibility installer status: idle")
         self.bootstrap_status.setObjectName("muted")
         self.bootstrap_status.setWordWrap(True)
         layout.addWidget(self.bootstrap_status)
         install = QPushButton("Install as Steam Compatibility Tool")
         install.clicked.connect(self.install_stl_compatibility)
         layout.addWidget(install)
-        reset = QPushButton("Remove & Reset STL-Steam")
+        reset = QPushButton("Remove & Reset legacy STL setup")
         reset.clicked.connect(self.remove_and_reset_stl)
         layout.addWidget(reset)
-        self.reset_status = QLabel("Reset backs up STL-Steam app files and removes only verified compatibility links. Skyrim, MO2 and Proton data are preserved.")
+        self.reset_status = QLabel("Reset backs up legacy STL app files and removes only verified compatibility links. Skyrim, MO2 and Proton data are preserved.")
         self.reset_status.setObjectName("muted")
         self.reset_status.setWordWrap(True)
         layout.addWidget(self.reset_status)
@@ -317,7 +317,7 @@ class MainWindow(QMainWindow):
         from stl_compatibility import reset_stl_steam
         preview = reset_stl_steam(dry_run=True)
         if not preview.get("ok"):
-            QMessageBox.warning(self, "Remove & Reset STL-Steam", preview.get("message", "Reset preflight failed."))
+            QMessageBox.warning(self, "Remove & Reset legacy STL setup", preview.get("message", "Reset preflight failed."))
             self._append_log("Reset preflight failed: " + preview.get("message", ""))
             return
         targets = "\n".join(preview.get("compatibility_targets", [])) or "(No compatibility registration detected)"
@@ -352,8 +352,8 @@ class MainWindow(QMainWindow):
     def install_stl_steam_bootstrap(self) -> None:
         script = Path(__file__).resolve().parent.parent / "install-skyrim-stl.sh"
         if not script.is_file():
-            QMessageBox.warning(self, "Install STL-Steam", "The installer script was not found in the project folder:\\n" + str(script))
-            self._append_log("STL-Steam bootstrap script missing: " + str(script))
+            QMessageBox.warning(self, "Install legacy STL compatibility layer", "The installer script was not found in the project folder:\\n" + str(script))
+            self._append_log("Legacy STL bootstrap script missing: " + str(script))
             return
         answer = QMessageBox.question(
             self, "Install STL-Steam",
@@ -363,7 +363,7 @@ class MainWindow(QMainWindow):
             QMessageBox.StandardButton.No,
         )
         if answer != QMessageBox.StandardButton.Yes:
-            self._append_log("STL-Steam bootstrap cancelled.")
+            self._append_log("Legacy STL bootstrap cancelled.")
             return
         if getattr(self, "bootstrap_process", None) and self.bootstrap_process.state() != QProcess.ProcessState.NotRunning:
             QMessageBox.information(self, "Install STL-Steam", "The installer is already running.")
@@ -380,7 +380,7 @@ class MainWindow(QMainWindow):
         self.bootstrap_process.start()
         if not self.bootstrap_process.waitForStarted(3000):
             self.bootstrap_status.setText("Installer could not start.")
-            self._append_log("STL-Steam bootstrap failed to start: " + self.bootstrap_process.errorString())
+            self._append_log("Legacy STL bootstrap failed to start: " + self.bootstrap_process.errorString())
             QMessageBox.warning(self, "Install STL-Steam", "Could not start the installer.\\n" + self.bootstrap_process.errorString())
 
     def _read_bootstrap_output(self) -> None:
@@ -397,12 +397,12 @@ class MainWindow(QMainWindow):
     def _bootstrap_finished(self, exit_code: int, exit_status) -> None:
         self._read_bootstrap_output()
         if exit_code == 0:
-            self.bootstrap_status.setText("STL-Steam installer completed successfully.")
+            self.bootstrap_status.setText("Legacy STL compatibility installer completed successfully.")
             QMessageBox.information(self, "Install STL-Steam", "Installer completed successfully. Review Logs for details.")
         else:
-            self.bootstrap_status.setText(f"STL-Steam installer failed (exit code {exit_code}).")
+            self.bootstrap_status.setText(f"Legacy STL compatibility installer failed (exit code {exit_code}).")
             QMessageBox.warning(self, "Install STL-Steam", f"Installer failed with exit code {exit_code}.\\nOpen Logs for the exact error and next step.")
-        self._append_log(f"STL-Steam bootstrap exited with code {exit_code}.")
+        self._append_log(f"Legacy STL bootstrap exited with code {exit_code}.")
         self.refresh_detection()
         self.refresh_stl()
 
