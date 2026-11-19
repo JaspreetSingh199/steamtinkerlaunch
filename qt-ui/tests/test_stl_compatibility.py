@@ -55,6 +55,30 @@ class CompatibilityToolTests(unittest.TestCase):
             self.assertEqual(result["install_target"], str(home / "stl/prefix"))
             self.assertFalse((steam / "compatibilitytools.d").exists())
 
+    def test_installs_upstream_source_then_registers_compat_tool(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            steam, _ = self.fixture_home(home)
+            source = home / "stl/prefix"
+            target = steam / "compatibilitytools.d/SteamTinkerLaunch"
+            def fake_run(command, **kwargs):
+                if command[1] == "clone":
+                    source.mkdir(parents=True)
+                    exe = source / "steamtinkerlaunch"
+                    exe.write_text("#!/bin/sh\\n")
+                    exe.chmod(0o755)
+                    return type("Result", (), {"returncode": 0, "stdout": "cloned", "stderr": ""})()
+                target.mkdir(parents=True)
+                (target / "compatibilitytool.vdf").write_text("test")
+                (target / "toolmanifest.vdf").write_text("test")
+                return type("Result", (), {"returncode": 0, "stdout": "added", "stderr": ""})()
+            with patch("stl_compatibility.subprocess.run", side_effect=fake_run) as run:
+                result = install_compatibility_tool(home, dry_run=False)
+            self.assertTrue(result["ok"])
+            self.assertTrue((source / "steamtinkerlaunch").exists())
+            self.assertTrue((target / "toolmanifest.vdf").exists())
+            self.assertEqual(run.call_count, 2)
+
     def test_calls_upstream_add_and_verifies_target(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
