@@ -22,6 +22,7 @@ jobs:
           bash -n tests/test-install-skyrim-stl.sh
           bash -n misc/stl-ui.sh
           bash -n tests/test-stl-ui.sh
+          bash -n qt-ui/install-desktop-launcher.sh
           python3 -m compileall -q qt-ui
       - name: Python unit tests
         run: python3 -m unittest discover -s qt-ui/tests -p 'test_*.py'
