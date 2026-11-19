@@ -56,6 +56,8 @@ class CompatibilityToolTests(unittest.TestCase):
             self.assertFalse((steam / "compatibilitytools.d").exists())
 
     def test_installs_upstream_source_then_registers_compat_tool(self):
+        # Kept as a regression test for the first implementation; helper layout is updated below.
+
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             steam, _ = self.fixture_home(home)
