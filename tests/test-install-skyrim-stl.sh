@@ -100,8 +100,9 @@ exit 1
 CURL
 chmod +x "$mockbin/curl"
 install_output="$(PATH="$mockbin:$PATH" MOCK_ARCHIVE="$TMP/mock-archive.tar.gz" run_installer --install 2>&1)" || fail "mock install failed"
-installed="$TMP/data/stl-steam/steamtinkerlaunch"
+installed="$TMP/data/stl-steam/bin/steamtinkerlaunch"
 [[ -x "$installed" ]] || fail "installed executable missing or not executable"
+[[ -d "$TMP/data/stl-steam/share/steamtinkerlaunch/collections" ]] || fail "support data not installed"
 grep -q "installed to" <<<"$install_output" || fail "install confirmation missing"
 pass "mocked archive installation"
 if output="$(PATH="$mockbin:$PATH" MOCK_ARCHIVE="$TMP/mock-archive.tar.gz" run_installer --install 2>&1)"; then
