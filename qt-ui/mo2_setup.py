@@ -59,25 +59,21 @@ def run_mo2_command(command: str, home: Path | None = None, *, dry_run: bool = T
         return {"ok": False, "dry_run": dry_run, "message": "Unsupported MO2 command."}
     home = home or Path.home()
     state = inspect_mo2_installation(home)
-    if command == "install" and state["installed"]:
-        return {"ok": False, "dry_run": dry_run,
-                "message": "MO2 is already installed in a detected location. Existing installation was not touched.",
-                "existing": state["executables"]}
     if command == "start" and not state["installed"]:
         return {"ok": False, "dry_run": dry_run,
-                "message": "MO2 executable is not detected; refusing to start an unverified installation."}
+                "message": "MO2.exe was not found in common paths. Check STL's configured MO2COMPDATA or use its list-installed command before starting.",
+                "candidates": state["candidates"]}
     if dry_run:
         return {"ok": True, "dry_run": True, "message": f"Would run: steamtinkerlaunch mo2 {command}"}
     result = _run_stl(["mo2", command], home, timeout=240 if command == "install" else 120)
     if not result["ok"]:
         return {**result, "dry_run": False}
     after = inspect_mo2_installation(home)
-    if command == "install" and not after["installed"]:
-        return {"ok": False, "dry_run": False,
-                "message": "STL returned success, but MO2.exe was not found in the inspected prefix paths.",
-                "output": result["output"], "candidates": after["candidates"]}
-    return {"ok": True, "dry_run": False, "message": f"STL MO2 {command} command completed.",
-            "output": result["output"], "executables": after["executables"]}
+    return {"ok": True, "dry_run": False,
+            "message": f"STL MO2 {command} command returned success; common-path discovery: {len(after['executables'])} executable(s).",
+            "output": result["output"], "executables": after["executables"],
+            "candidates": after["candidates"],
+            "verification": "STL command exit status; custom MO2COMPDATA may use another path."}
 
 
 def inspect_skyrim_mo2_instance(home: Path | None = None) -> dict:
@@ -103,9 +99,8 @@ def create_skyrim_mo2_instance(home: Path | None = None, *, dry_run: bool = True
     if stl is None:
         return {"ok": False, "dry_run": dry_run, "message": "STL executable not found."}
     mo2 = inspect_mo2_installation(home)
-    if not mo2["installed"]:
-        return {"ok": False, "dry_run": dry_run,
-                "message": "MO2.exe is not detected. Install MO2 before creating a game instance."}
+    # MO2COMPDATA is configurable in STL. If common paths do not match, rely on
+    # STL's own command and installed-instance verification rather than guessing.
     before = inspect_skyrim_mo2_instance(home)
     if before.get("installed"):
         return {"ok": False, "dry_run": dry_run,
@@ -113,7 +108,9 @@ def create_skyrim_mo2_instance(home: Path | None = None, *, dry_run: bool = True
                 "instance": before["output"]}
     if dry_run:
         return {"ok": True, "dry_run": True,
-                "message": "Would run: steamtinkerlaunch mo2 create-instance 489830"}
+                "message": "Would run: steamtinkerlaunch mo2 create-instance 489830",
+                "common_path_mo2_detected": mo2["installed"],
+                "note": "STL validates its effective MO2 prefix, including custom MO2COMPDATA."}
     result = _run_stl(["mo2", "create-instance", APP_ID], home, timeout=180)
     if not result["ok"]:
         return {**result, "dry_run": False}

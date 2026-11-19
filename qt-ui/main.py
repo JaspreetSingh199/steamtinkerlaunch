@@ -167,7 +167,7 @@ class MainWindow(QMainWindow):
             detail = "No MO2 installation found in the common locations.\n\nNo folders were created and no existing data was changed."
             status = "MO2 not detected"
         self.mo2_result = self._replace_card(self.mo2_page, self.mo2_result, card(status, detail))
-        self._append_log("MO2 detection: " + status)
+        self._append_log("MO2 discovery: " + status + " (common paths only; STL MO2COMPDATA may be customized)")
 
     def refresh_skyrim_instance(self) -> None:
         result = inspect_skyrim_mo2_instance()
