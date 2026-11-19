@@ -10,10 +10,18 @@ import subprocess
 
 TOOL_DIR_NAME = "SteamTinkerLaunch"
 
+UPSTREAM_REPO = "https://github.com/sonic2kk/steamtinkerlaunch.git"
+LOCAL_INSTALL = Path("stl/prefix")
+
 def find_stl_executable(home: Path | None = None) -> Path | None:
     home = home or Path.home()
-    candidates = [home / ".local/share/stl-steam/bin/steamtinkerlaunch",
-                  home / ".local/share/SteamTinkerLaunch/bin/steamtinkerlaunch"]
+    candidates = [
+        home / "stl/prefix/steamtinkerlaunch",
+        home / ".local/share/stl-steam/steamtinkerlaunch",
+        home / ".local/share/stl-steam/bin/steamtinkerlaunch",
+        home / ".local/share/SteamTinkerLaunch/steamtinkerlaunch",
+        home / ".local/share/SteamTinkerLaunch/bin/steamtinkerlaunch",
+    ]
     found = shutil.which("steamtinkerlaunch")
     if found:
         candidates.append(Path(found))
@@ -21,6 +29,35 @@ def find_stl_executable(home: Path | None = None) -> Path | None:
         if candidate.is_file() and os.access(candidate, os.X_OK):
             return candidate.resolve()
     return None
+
+def install_stl_source(home: Path | None = None, *, dry_run: bool = True) -> dict:
+    """Clone upstream STL into the Protonup-Qt-compatible user-local prefix, without overwriting."""
+    home = home or Path.home()
+    target = home / LOCAL_INSTALL
+    executable = target / "steamtinkerlaunch"
+    if executable.is_file() and os.access(executable, os.X_OK):
+        return {"ok": True, "dry_run": dry_run, "message": "STL source installation already exists.", "executable": str(executable)}
+    if target.exists():
+        return {"ok": False, "dry_run": dry_run, "message": "Install target already exists but is not a verified STL install; left untouched.", "target": str(target)}
+    git = shutil.which("git")
+    if not git:
+        return {"ok": False, "dry_run": dry_run, "message": "Git is required to install STL from upstream."}
+    if dry_run:
+        return {"ok": True, "dry_run": True, "message": "Would clone upstream STL into the user-local install prefix.", "target": str(target), "executable": str(executable)}
+    try:
+        result = subprocess.run([git, "clone", "--depth", "1", UPSTREAM_REPO, str(target)],
+                               check=False, capture_output=True, text=True, timeout=180)
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "dry_run": False, "message": "STL download timed out. The partial directory, if any, was left for inspection.", "target": str(target)}
+    except OSError as error:
+        return {"ok": False, "dry_run": False, "message": f"Could not start git clone: {error}", "target": str(target)}
+    output = "\\n".join(part for part in (result.stdout, result.stderr) if part).strip()
+    if result.returncode != 0:
+        return {"ok": False, "dry_run": False, "message": f"STL clone failed (exit {result.returncode}).", "output": output, "target": str(target)}
+    if not executable.is_file():
+        return {"ok": False, "dry_run": False, "message": "Clone completed but upstream executable was not found.", "output": output, "target": str(target)}
+    executable.chmod(executable.stat().st_mode | 0o111)
+    return {"ok": True, "dry_run": False, "message": "STL source installed.", "executable": str(executable), "output": output}
 
 def find_steam_roots(home: Path | None = None) -> list[Path]:
     home = home or Path.home()
@@ -51,7 +88,17 @@ def install_compatibility_tool(home: Path | None = None, *, dry_run: bool = True
     home = home or Path.home()
     executable = find_stl_executable(home)
     if executable is None:
-        return {"ok": False, "dry_run": dry_run, "message": "STL executable not found. Install STL-Steam first."}
+        source = install_stl_source(home, dry_run=dry_run)
+        if not source.get("ok"):
+            return {**source, "message": "STL installation preflight failed: " + source.get("message", "")}
+        if dry_run:
+            return {"ok": True, "dry_run": True, "message": "Would install upstream STL, then run \`steamtinkerlaunch compat add\`.", "targets": [str(p) for p in compatibility_tool_targets(home)], "install_target": source.get("target")}
+        source = install_stl_source(home, dry_run=False)
+        if not source.get("ok"):
+            return source
+        executable = find_stl_executable(home)
+        if executable is None:
+            return {"ok": False, "dry_run": False, "message": "STL installation completed, but executable detection failed.", "install": source}
     roots = find_steam_roots(home)
     if not roots:
         return {"ok": False, "dry_run": dry_run, "message": "No Steam root with steamapps was detected."}
