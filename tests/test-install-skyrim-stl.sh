@@ -129,5 +129,16 @@ fi
 grep -q "Refusing to overwrite" <<<"$output" || fail "existing-install refusal missing"
 pass "existing-install protection"
 
+# 7. Unsafe link entries are rejected before extraction.
+rm -rf "$TMP/data/stl-steam"
+ln -s /etc/passwd "$fixture/steamtinkerlaunch-test/escape-link"
+tar -czf "$TMP/link-archive.tar.gz" -C "$TMP/archive-fixture" steamtinkerlaunch-test
+if output="$(PATH="$mockbin:$PATH" MOCK_ARCHIVE="$TMP/link-archive.tar.gz" run_installer --install 2>&1)"; then
+  fail "installer unexpectedly accepted archive symlink"
+fi
+grep -q "Links are not accepted" <<<"$output" || fail "unsafe link rejection message missing"
+[[ ! -e "$TMP/data/stl-steam" ]] || fail "installer created destination after unsafe archive rejection"
+pass "archive link rejection"
+
 echo "All installer detection and installation tests passed."
 
