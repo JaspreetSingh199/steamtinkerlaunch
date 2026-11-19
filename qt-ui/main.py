@@ -299,12 +299,55 @@ class MainWindow(QMainWindow):
         install = QPushButton("Install as Steam Compatibility Tool")
         install.clicked.connect(self.install_stl_compatibility)
         layout.addWidget(install)
+        reset = QPushButton("Remove & Reset STL-Steam")
+        reset.clicked.connect(self.remove_and_reset_stl)
+        layout.addWidget(reset)
+        self.reset_status = QLabel("Reset backs up STL-Steam app files and removes only verified compatibility links. Skyrim, MO2 and Proton data are preserved.")
+        self.reset_status.setObjectName("muted")
+        self.reset_status.setWordWrap(True)
+        layout.addWidget(self.reset_status)
         self.launch_note = QLabel("Steam launch configuration is not modified by this prototype.")
         self.launch_note.setObjectName("muted")
         self.launch_note.setWordWrap(True)
         layout.addWidget(self.launch_note)
         layout.addStretch(1)
         return page
+
+    def remove_and_reset_stl(self) -> None:
+        from stl_compatibility import reset_stl_steam
+        preview = reset_stl_steam(dry_run=True)
+        if not preview.get("ok"):
+            QMessageBox.warning(self, "Remove & Reset STL-Steam", preview.get("message", "Reset preflight failed."))
+            self._append_log("Reset preflight failed: " + preview.get("message", ""))
+            return
+        targets = "\\n".join(preview.get("compatibility_targets", [])) or "(No compatibility registration detected)"
+        backup = preview.get("backup") or "(No existing app directory)"
+        details = (
+            "This will remove only STL-Steam-managed application files and verified Steam compatibility links.\\n\\n"
+            "App source: " + str(preview.get("install_root") or "(Not installed)") + "\\n"
+            "Backup: " + backup + "\\n"
+            "Steam compatibility targets: " + targets + "\\n\\n"
+            "It will NOT remove Skyrim, saves, mods, MO2 instances/profiles/downloads, Proton prefixes, "
+            "STL user configuration, or Steam launch settings.\\n\\nContinue?"
+        )
+        answer = QMessageBox.question(
+            self, "Remove & Reset STL-Steam", details,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            self._append_log("Remove & Reset cancelled.")
+            return
+        result = reset_stl_steam(dry_run=False)
+        self._append_log("Remove & Reset: " + result.get("message", "unknown result"))
+        if result.get("backup"):
+            self._append_log("Reset backup: " + result["backup"])
+        if result.get("ok"):
+            note = "\\n\\nExit and restart Steam to refresh its compatibility-tool list." if result.get("restart_steam") else ""
+            QMessageBox.information(self, "Remove & Reset STL-Steam", result.get("message", "Reset complete.") + note)
+        else:
+            QMessageBox.warning(self, "Remove & Reset STL-Steam", result.get("message", "Reset stopped.") + "\\n\\nPersonal game/MO2 data was not intentionally modified.")
+        self.refresh_stl()
 
     def install_stl_steam_bootstrap(self) -> None:
         script = Path(__file__).resolve().parent.parent / "install-skyrim-stl.sh"
