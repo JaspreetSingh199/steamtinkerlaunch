@@ -156,6 +156,7 @@ def reset_stl_steam(home: Path | None = None, *, dry_run: bool = True) -> dict:
 
     # Validate all compatibility entries before moving any app files.
     owned_links: list[Path] = []
+    original_link_targets: dict[Path, str] = {}
     for target in targets:
         if not target.is_symlink():
             kind = "directory" if target.is_dir() else "unexpected file"
@@ -163,6 +164,7 @@ def reset_stl_steam(home: Path | None = None, *, dry_run: bool = True) -> dict:
                     "message": f"A real {kind} exists at a Steam compatibility target. Ownership cannot be proven; nothing was changed.",
                     "preserved_target": str(target)}
         try:
+            raw_target = os.readlink(target)
             link_target = target.resolve(strict=True)
         except (OSError, RuntimeError):
             return {"ok": False, "dry_run": dry_run,
@@ -175,7 +177,7 @@ def reset_stl_steam(home: Path | None = None, *, dry_run: bool = True) -> dict:
                     "message": "A compatibility symlink points outside the STL-Steam app install. It was left untouched; nothing was changed.",
                     "preserved_target": str(target), "link_target": str(link_target)}
         owned_links.append(target)
-
+        original_link_targets[target] = raw_target
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     backup = install_root.with_name(f"stl-steam.reset-backup-{timestamp}")
     if backup.exists() or backup.is_symlink():
@@ -224,10 +226,7 @@ def reset_stl_steam(home: Path | None = None, *, dry_run: bool = True) -> dict:
                         raise FileExistsError(f"Refusing to replace new entry during rollback: {path}")
                     # Recreate the original symlink without dereferencing it.
                     # Use the preflight's recorded literal target text.
-                    original = next((p for p in owned_links if p == path), None)
-                    if original is not None:
-                        path.symlink_to(os.readlink(path) if path.is_symlink() else str(install_root),
-                                        target_is_directory=True)
+                    path.symlink_to(original_link_targets[path])
                 elif kind == "source" and (backup.exists() or backup.is_symlink()):
                     if install_root.exists() or install_root.is_symlink():
                         raise FileExistsError(f"Refusing to overwrite install path during rollback: {install_root}")
