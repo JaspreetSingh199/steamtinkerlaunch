@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 from pathlib import Path
 import subprocess
 
@@ -95,43 +94,15 @@ def run_mo2_command(command: str, home: Path | None = None, *, dry_run: bool = T
         return {"ok": True, "dry_run": True,
                 "message": f"Ready to start STL's visible MO2 {command} window.",
                 "command": command_line}
-    environment = os.environ.copy()
-    yad = shutil.which("yad")
-    if yad:
-        try:
-            version_text = subprocess.run([yad, "--version"], capture_output=True, text=True, timeout=3).stdout.strip()
-            major = int(version_text.split(".", 1)[0])
-        except (OSError, subprocess.SubprocessError, ValueError, IndexError):
-            major = 0
-        if major >= 15:
-            # YAD 15 removed two obsolete flags still passed by older upstream STL.
-            # A private PATH shim filters only those no-op flags; it does not
-            # modify system YAD or the STL installation.
-            shim_dir = home / ".cache/stl-steam/yad-compat/bin"
-            shim = shim_dir / "yad"
-            real_yad = Path(yad).resolve()
-            script = ("#!/usr/bin/env python3\\n"
-                     "import os, sys\\n"
-                     "real_yad = " + repr(str(real_yad)) + "\\n"
-                     "args = [arg for arg in sys.argv[1:] if arg not in {'--decorated', '--image-on-top'}]\\n"
-                     "os.execv(real_yad, [real_yad, *args])\\n")
-            try:
-                shim_dir.mkdir(parents=True, exist_ok=True)
-                staged = shim.with_suffix(".tmp")
-                staged.write_text(script, encoding="utf-8")
-                staged.chmod(0o755)
-                os.replace(staged, shim)
-                environment["PATH"] = str(shim_dir) + os.pathsep + environment.get("PATH", "")
-            except OSError as error:
-                return {"ok": False, "dry_run": False,
-                        "message": f"Could not prepare YAD 15 compatibility wrapper: {error}. MO2 was not started."}
+    # Launch the upstream GUI command without capturing its output. Do not
+    # modify PATH or wrap system YAD; Proton/Wine architecture must be valid.
     try:
         process = subprocess.Popen(command_line, stdin=None, stdout=None, stderr=None,
-                                   start_new_session=True, env=environment)
+                                   start_new_session=True)
     except OSError as error:
         return {"ok": False, "dry_run": False,
                 "message": f"Could not start STL's MO2 {command} process: {error}",
-                "next_step": "Check that the executable exists and is marked executable. No MO2 data was changed by this app."}
+                "next_step": "Check the selected Proton distribution and its Wine binary architecture. No MO2 data was changed by this app."}
     return {"ok": True, "dry_run": False,
             "message": f"Started STL's MO2 {command} process (PID {process.pid}). The installer window/output should be visible separately. This confirms start only, not installation completion.",
             "pid": process.pid, "command": command_line,
