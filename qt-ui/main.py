@@ -301,14 +301,14 @@ class MainWindow(QMainWindow):
 
     def start_mo2(self) -> None:
         first_run = not self._has_instance()
-        result = launch_mo2(pick_instance=first_run)
+        result = launch_mo2()
         self._log(result.get("message", "MO2 launch failed."))
         if result.get("ok"):
             self.progress_label.setText("MO2 launched through Proton.")
             if first_run:
                 QMessageBox.information(
                     self, "First MO2 launch",
-                    "MO2 has been opened in its instance picker.\n\n"
+                    "MO2 has been opened for its first-run setup.\n\n"
                     "Create a new instance and select Skyrim Special Edition. "
                     "Then choose Skyrim or SKSE in MO2's executable dropdown and press Run."
                 )
