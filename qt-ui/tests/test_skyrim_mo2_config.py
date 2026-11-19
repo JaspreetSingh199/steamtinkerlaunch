@@ -40,6 +40,15 @@ class SkyrimMO2ConfigTests(unittest.TestCase):
             self.assertTrue(state["managed"])
             self.assertTrue(Path(state["path"]).read_text().startswith("# Managed by STL-Steam."))
 
+    def test_existing_managed_config_is_reported_as_managed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            created = configure_skyrim_mo2(home, dry_run=False, mode="gui")
+            self.assertTrue(created["ok"])
+            state = inspect_skyrim_mo2_config(home)
+            self.assertTrue(state["managed"])
+            self.assertEqual(state["mo2_mode"], "gui")
+
     def test_existing_user_config_is_preserved(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
