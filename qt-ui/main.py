@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
+from PySide6.QtCore import QProcess
 from PySide6.QtWidgets import (
     QApplication, QFrame, QLabel, QListWidget, QMainWindow, QPushButton,
     QStackedWidget, QVBoxLayout, QHBoxLayout, QWidget, QPlainTextEdit, QMessageBox,
@@ -279,6 +281,13 @@ class MainWindow(QMainWindow):
         refresh = QPushButton("Refresh STL detection")
         refresh.clicked.connect(self.refresh_stl)
         layout.addWidget(refresh)
+        bootstrap = QPushButton("Install / Update STL-Steam")
+        bootstrap.clicked.connect(self.install_stl_steam_bootstrap)
+        layout.addWidget(bootstrap)
+        self.bootstrap_status = QLabel("STL-Steam application installer status: idle")
+        self.bootstrap_status.setObjectName("muted")
+        self.bootstrap_status.setWordWrap(True)
+        layout.addWidget(self.bootstrap_status)
         install = QPushButton("Install as Steam Compatibility Tool")
         install.clicked.connect(self.install_stl_compatibility)
         layout.addWidget(install)
@@ -288,6 +297,63 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.launch_note)
         layout.addStretch(1)
         return page
+
+    def install_stl_steam_bootstrap(self) -> None:
+        script = Path(__file__).resolve().parent.parent / "install-skyrim-stl.sh"
+        if not script.is_file():
+            QMessageBox.warning(self, "Install STL-Steam", "The installer script was not found in the project folder:\\n" + str(script))
+            self._append_log("STL-Steam bootstrap script missing: " + str(script))
+            return
+        answer = QMessageBox.question(
+            self, "Install STL-Steam",
+            "Run the bundled installer to detect Steam and Skyrim SE, then download STL-Steam into your user-local data directory.\\n\\n"
+            "This does not change Steam launch options, Skyrim files, saves, mods, or existing MO2 instances.\\n\\nContinue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            self._append_log("STL-Steam bootstrap cancelled.")
+            return
+        if getattr(self, "bootstrap_process", None) and self.bootstrap_process.state() != QProcess.ProcessState.NotRunning:
+            QMessageBox.information(self, "Install STL-Steam", "The installer is already running.")
+            return
+        self.bootstrap_process = QProcess(self)
+        self.bootstrap_process.setProgram("bash")
+        self.bootstrap_process.setArguments([str(script), "--install"])
+        self.bootstrap_process.setWorkingDirectory(str(script.parent))
+        self.bootstrap_process.readyReadStandardOutput.connect(self._read_bootstrap_output)
+        self.bootstrap_process.readyReadStandardError.connect(self._read_bootstrap_output)
+        self.bootstrap_process.finished.connect(self._bootstrap_finished)
+        self.bootstrap_status.setText("Installing STL-Steam… See Logs for live output.")
+        self._append_log("Starting bundled install-skyrim-stl.sh --install from the Qt UI.")
+        self.bootstrap_process.start()
+        if not self.bootstrap_process.waitForStarted(3000):
+            self.bootstrap_status.setText("Installer could not start.")
+            self._append_log("STL-Steam bootstrap failed to start: " + self.bootstrap_process.errorString())
+            QMessageBox.warning(self, "Install STL-Steam", "Could not start the installer.\\n" + self.bootstrap_process.errorString())
+
+    def _read_bootstrap_output(self) -> None:
+        process = getattr(self, "bootstrap_process", None)
+        if not process:
+            return
+        output = bytes(process.readAllStandardOutput()).decode(errors="replace")
+        errors = bytes(process.readAllStandardError()).decode(errors="replace")
+        if output.strip():
+            self._append_log(output.rstrip())
+        if errors.strip():
+            self._append_log(errors.rstrip())
+
+    def _bootstrap_finished(self, exit_code: int, exit_status) -> None:
+        self._read_bootstrap_output()
+        if exit_code == 0:
+            self.bootstrap_status.setText("STL-Steam installer completed successfully.")
+            QMessageBox.information(self, "Install STL-Steam", "Installer completed successfully. Review Logs for details.")
+        else:
+            self.bootstrap_status.setText(f"STL-Steam installer failed (exit code {exit_code}).")
+            QMessageBox.warning(self, "Install STL-Steam", f"Installer failed with exit code {exit_code}.\\nOpen Logs for the exact error and next step.")
+        self._append_log(f"STL-Steam bootstrap exited with code {exit_code}.")
+        self.refresh_detection()
+        self.refresh_stl()
 
     def refresh_stl(self) -> None:
         result = inspect_stl_installation()
