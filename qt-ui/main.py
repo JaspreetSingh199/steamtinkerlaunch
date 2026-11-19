@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Experimental Qt 6 UI shell for STL-Steam. Backend is intentionally not connected."""
+"""Qt 6 desktop shell for STL-Steam's Skyrim setup."""
 from __future__ import annotations
 
 import sys
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QApplication, QFrame, QLabel, QListWidget, QMainWindow, QProgressBar,
-    QPushButton, QStackedWidget, QVBoxLayout, QHBoxLayout, QWidget,
+    QApplication, QFrame, QLabel, QListWidget, QMainWindow, QPushButton,
+    QStackedWidget, QVBoxLayout, QHBoxLayout, QWidget,
 )
+from skyrim_detection import detect_skyrim
 
 STYLE = """
 QWidget { background: #15171b; color: #e5e7eb; font-size: 14px; }
@@ -20,14 +21,13 @@ QLabel#muted { color: #9ca3af; }
 QPushButton { background: #303744; border: 1px solid #46505f; border-radius: 8px; padding: 10px 16px; }
 QPushButton:hover { background: #3a4555; }
 QPushButton:disabled { color: #8b929c; background: #262a31; }
-QProgressBar { border: 0; background: #30343c; border-radius: 5px; height: 10px; }
-QProgressBar::chunk { background: #60a5fa; border-radius: 5px; }
 """
 
 def card(title: str, description: str) -> QFrame:
     frame = QFrame()
     frame.setObjectName("card")
     layout = QVBoxLayout(frame)
+    layout.setContentsMargins(16, 16, 16, 16)
     title_label = QLabel(title)
     title_label.setStyleSheet("font-size: 17px; font-weight: bold;")
     detail = QLabel(description)
@@ -47,50 +47,84 @@ class MainWindow(QMainWindow):
         row.setContentsMargins(14, 14, 14, 14)
         row.setSpacing(12)
 
-        nav = QListWidget()
-        nav.setFixedWidth(210)
-        nav.addItems(["Overview", "Game Detection", "MO2 Setup", "Compatibility", "Logs"])
-        nav.setCurrentRow(0)
+        self.nav = QListWidget()
+        self.nav.setFixedWidth(210)
+        self.nav.addItems(["Overview", "Game Detection", "MO2 Setup", "Compatibility", "Logs"])
+        self.nav.setCurrentRow(0)
         self.pages = QStackedWidget()
-        self.pages.addWidget(self.overview())
-        self.pages.addWidget(self.placeholder("Game Detection", "Detection will be connected to the reviewed installer logic."))
-        self.pages.addWidget(self.placeholder("MO2 Setup", "A guided MO2 setup flow will be added after the runtime path is verified."))
-        self.pages.addWidget(self.placeholder("Compatibility", "Proton and prefix controls will be added without changing existing settings silently."))
+        self.overview_page = self.overview()
+        self.detection_page = self.detection()
+        self.pages.addWidget(self.overview_page)
+        self.pages.addWidget(self.detection_page)
+        self.pages.addWidget(self.placeholder("MO2 Setup", "MO2 installation and instance setup will be enabled after the safe, per-game configuration path is verified."))
+        self.pages.addWidget(self.placeholder("Compatibility", "Compatibility settings will be read first. Existing settings will never be silently overwritten."))
         self.pages.addWidget(self.placeholder("Logs", "Installer and STL-Steam logs will be displayed here."))
-        nav.currentRowChanged.connect(self.pages.setCurrentIndex)
-        row.addWidget(nav)
+        self.nav.currentRowChanged.connect(self.pages.setCurrentIndex)
+        row.addWidget(self.nav)
         row.addWidget(self.pages, 1)
         self.setCentralWidget(root)
+        self.refresh_detection()
 
     def overview(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
         heading = QLabel("Skyrim Setup")
         heading.setObjectName("heading")
-        subtitle = QLabel("STL-Steam desktop frontend prototype")
+        subtitle = QLabel("A guided, reversible STL-Steam setup")
         subtitle.setObjectName("muted")
         layout.addWidget(heading)
         layout.addWidget(subtitle)
         layout.addSpacing(12)
-        layout.addWidget(card("Installer", "The bootstrap is still a separate, tested component. UI actions are not connected yet."))
-        layout.addWidget(card("Game", "Skyrim Special Edition detection will be wired in after frontend/backend contracts are defined."))
-        layout.addWidget(card("Mod Organizer 2", "MO2 installation and instance setup will use STL's own runtime logic."))
-        progress = QProgressBar()
-        progress.setRange(0, 100)
-        progress.setValue(0)
-        progress.setTextVisible(False)
-        layout.addWidget(progress)
-        buttons = QHBoxLayout()
-        install = QPushButton("Install STL-Steam")
-        install.setEnabled(False)
-        setup = QPushButton("Configure MO2")
-        setup.setEnabled(False)
-        buttons.addWidget(install)
-        buttons.addWidget(setup)
-        layout.addLayout(buttons)
+        self.game_summary = card("Skyrim detection", "Checking Steam libraries…")
+        layout.addWidget(self.game_summary)
+        layout.addWidget(card("STL-Steam", "The installer will be staged and verified before setup actions are enabled."))
+        layout.addWidget(card("Mod Organizer 2", "Existing MO2 installations and instances will be preserved."))
         layout.addStretch(1)
-        layout.addWidget(QLabel("Prototype only — backend actions are disabled to avoid changing your system."))
+        note = QLabel("Read-only detection is enabled. Install and launch actions are not yet connected.")
+        note.setObjectName("muted")
+        note.setWordWrap(True)
+        layout.addWidget(note)
         return page
+
+    def detection(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        heading = QLabel("Game Detection")
+        heading.setObjectName("heading")
+        explanation = QLabel("Searches Steam's standard locations and libraryfolders.vdf. This is read-only.")
+        explanation.setObjectName("muted")
+        explanation.setWordWrap(True)
+        layout.addWidget(heading)
+        layout.addWidget(explanation)
+        self.detect_result = card("Status", "Checking…")
+        layout.addWidget(self.detect_result)
+        refresh = QPushButton("Refresh detection")
+        refresh.clicked.connect(self.refresh_detection)
+        layout.addWidget(refresh)
+        layout.addStretch(1)
+        return page
+
+    def refresh_detection(self) -> None:
+        result = detect_skyrim()
+        if result.get("found"):
+            detail = "Detected at:\\n" + result["game_dir"] + "\\n\\nSteam root: " + result["steam_root"]
+            status = "Skyrim Special Edition detected"
+        else:
+            roots = result.get("steam_roots", [])
+            detail = "Skyrim SE (AppID 489830) was not found.\\n\\nSteam roots checked:\\n" + ("\\n".join(roots) if roots else "No standard Steam installation found.")
+            status = "Skyrim not detected"
+        self.detect_result = self._replace_card(self.detection_page, self.detect_result, card(status, detail))
+        self.game_summary = self._replace_card(self.overview_page, self.game_summary, card(status, detail))
+
+    @staticmethod
+    def _replace_card(page: QWidget, old: QFrame, new: QFrame) -> QFrame:
+        layout = page.layout()
+        index = layout.indexOf(old)
+        if index >= 0:
+            layout.removeWidget(old)
+            old.deleteLater()
+            layout.insertWidget(index, new)
+        return new
 
     @staticmethod
     def placeholder(title: str, text: str) -> QWidget:
