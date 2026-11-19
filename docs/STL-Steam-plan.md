@@ -43,4 +43,6 @@ Detection should inspect Steam library manifests rather than assume a single Ste
 
 - Fork: `JaspreetSingh199/steamtinkerlaunch`
 - Working branch: `stl-steam`
-- No application source changes have been made yet.
+- The installer prototype and integration tests are committed. Detection-only tests cover missing Steam, missing Skyrim, default library, and alternate library. Install-path tests are added using a mocked archive/curl fixture; they still need local execution against the exact committed files before being considered verified.
+- Installer is dry-run by default, and installation uses a staging directory before moving into the final user-local path.
+- Launch integration, MO2 configuration, and runtime validation remain unimplemented.
