@@ -13,7 +13,7 @@ import subprocess
 import tempfile
 import urllib.request
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Callable
 
 from skyrim_detection import find_steam_roots
@@ -135,6 +135,8 @@ def inspect_wyrd_installation(home: Path | None = None) -> dict:
             metadata = json.loads(marker.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             installed = False
+        else:
+            installed = installed and metadata.get("managed_by") == "Wyrd"
     prefix_ready = (paths["prefix"] / "pfx/drive_c").is_dir() and prefix_marker.is_file()
     external = [str(p) for p in find_mo2_installations(Path(home or Path.home()))]
     return {
@@ -171,6 +173,7 @@ def _runtime_environment(proton: Path, steam_root: Path, prefix_root: Path) -> d
         "STEAM_COMPAT_DATA_PATH": str(prefix_root),
         "SteamAppId": APP_ID,
         "SteamGameId": APP_ID,
+        "STEAM_COMPAT_APP_ID": APP_ID,
         "PROTON_LOG": "0",
     })
     env.setdefault("PROTON_NO_ESYNC", "0")
@@ -286,7 +289,7 @@ def _validate_archive_members(names: list[str]) -> None:
     for name in names:
         normalized = name.replace("\\", "/")
         path = Path(normalized)
-        if path.is_absolute() or any(part == ".." for part in path.parts):
+        if path.is_absolute() or PureWindowsPath(normalized).is_absolute() or any(part == ".." for part in path.parts):
             raise RuntimeError(f"Unsafe path in MO2 archive: {name}")
 
 
@@ -297,6 +300,7 @@ def _extract_mo2(archive: Path, stage: Path, callback: ProgressCallback | None =
         raise RuntimeError("The 7z extraction component is missing. Re-run Wyrd's GUI launcher to install its dependencies.") from error
     if callback:
         callback(87, "Extracting the official MO2 archive…")
+    stage.mkdir(parents=True, exist_ok=True)
     with py7zr.SevenZipFile(archive, mode="r") as bundle:
         _validate_archive_members(bundle.getnames())
         bundle.extractall(path=stage)
@@ -325,6 +329,17 @@ def install_mo2_environment(proton_path: Path, game_path: Path,
     if install_dir.exists():
         state = inspect_wyrd_installation(home)
         if state.get("installed"):
+            if not state.get("prefix_ready"):
+                if callback:
+                    callback(10, "Repairing Wyrd's incomplete Proton prefix…")
+                _initialize_prefix(proton_path, steam_root, prefix_root, game_path, callback)
+                return {
+                    "ok": True, "already_installed": True,
+                    "executable": state.get("executable"), "version": state.get("metadata", {}).get("version", "unknown"),
+                    "proton": str(proton_path), "prefix": str(prefix_root),
+                    "game_path": str(game_path),
+                    "message": "The Wyrd Proton prefix was initialized and the existing MO2 installation was verified.",
+                }
             return {"ok": True, "already_installed": True, **state}
         raise RuntimeError(f"MO2 install target already exists but is not a verified Wyrd installation: {install_dir}. It was left untouched.")
     if callback:
