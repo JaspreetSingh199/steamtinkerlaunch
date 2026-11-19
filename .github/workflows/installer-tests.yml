@@ -25,3 +25,17 @@ jobs:
         run: bash tests/test-install-skyrim-stl.sh
       - name: Terminal UI wrapper tests
         run: bash tests/test-stl-ui.sh
+
+  qt-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Qt UI dependencies
+        run: python -m pip install -r qt-ui/requirements.txt
+      - name: Run Qt smoke tests (offscreen)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python3 -m unittest discover -s qt-ui/tests -p 'test_main_window.py'
