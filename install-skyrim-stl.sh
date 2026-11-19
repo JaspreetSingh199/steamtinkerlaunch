@@ -117,9 +117,14 @@ staging_dir="$(mktemp -d "$install_parent/.stl-steam-staging.XXXXXX")"
 cleanup() { rm -rf "$tmpdir"; [[ -z "$staging_dir" ]] || rm -rf "$staging_dir"; }
 trap cleanup EXIT
 
-cp -a "$source_dir/." "$staging_dir/"
-[[ -f "$staging_dir/steamtinkerlaunch" ]] || fail "Staged main executable missing."
-chmod +x "$staging_dir/steamtinkerlaunch"
+mkdir -p "$staging_dir/bin" "$staging_dir/share/steamtinkerlaunch"
+cp "$source_dir/steamtinkerlaunch" "$staging_dir/bin/steamtinkerlaunch"
+cp -a "$source_dir/collections" "$source_dir/eval" "$source_dir/guicfgs" "$source_dir/lang" "$source_dir/misc" "$staging_dir/share/steamtinkerlaunch/"
+cp "$source_dir/README.md" "$staging_dir/share/doc-STL-Steam.md"
+# Make the main script use the user-local prefix instead of /usr.
+sed -i "s|^PREFIX=\"/usr\"|PREFIX=\"$INSTALL_ROOT\"|" "$staging_dir/bin/steamtinkerlaunch"
+grep -q "^PREFIX=\"$INSTALL_ROOT\"" "$staging_dir/bin/steamtinkerlaunch" || fail "Could not configure user-local prefix in executable."
+chmod +x "$staging_dir/bin/steamtinkerlaunch"
 mv "$staging_dir" "$INSTALL_ROOT"
 staging_dir=""
 note "STL-Steam installed to $INSTALL_ROOT"
