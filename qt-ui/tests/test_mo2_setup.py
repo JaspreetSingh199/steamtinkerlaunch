@@ -41,6 +41,28 @@ class MO2SetupTests(unittest.TestCase):
             self.assertEqual(result["architecture"], "AArch64")
             self.assertIn("Choose a Proton build", result["message"])
 
+    def test_unrelated_arm64_proton_does_not_block_mo2_command(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            stl = home / ".local/share/stl-steam/bin/steamtinkerlaunch"
+            stl.parent.mkdir(parents=True)
+            stl.write_text("#!/bin/sh\\n")
+            stl.chmod(0o755)
+            unrelated = home / ".local/share/Steam/compatibilitytools.d/GE-Proton-aarch64"
+            wine = unrelated / "files/bin/wine"
+            wine.parent.mkdir(parents=True)
+            header = bytearray(20)
+            header[:4] = bytes([0x7f, 69, 76, 70])
+            header[4] = 2
+            header[5] = 1
+            header[18:20] = (183).to_bytes(2, "little")
+            wine.write_bytes(header)
+            with patch("mo2_setup.subprocess.Popen") as popen:
+                popen.return_value.pid = 1234
+                result = run_mo2_command("install", home, dry_run=False)
+            self.assertTrue(result["ok"], result)
+            self.assertEqual(result["pid"], 1234)
+
     def test_install_refuses_to_overwrite_detected_mo2(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
