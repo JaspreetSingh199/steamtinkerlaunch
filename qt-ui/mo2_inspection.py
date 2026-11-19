@@ -34,7 +34,10 @@ def find_steam_roots(home: Path | None = None) -> list[Path]:
 def find_mo2_installations(home: Path | None = None) -> list[Path]:
     """Find common MO2 Linux/Proton locations without traversing whole disks."""
     home = home or Path.home()
+    config = Path(os.environ.get("XDG_CONFIG_HOME", home / ".config"))
     candidates = [
+        config / "steamtinkerlaunch/mo2/compatdata/pfx/drive_c/Modding/MO2",
+        config / "stl/mo2/compatdata/pfx/drive_c/Modding/MO2",
         home / "Games/ModOrganizer",
         home / "Games/Mod Organizer 2",
         home / ".local/share/Steam/steamapps/compatdata/489830/pfx/drive_c/Modding/MO2",

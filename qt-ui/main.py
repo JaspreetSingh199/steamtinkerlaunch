@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 from skyrim_detection import detect_skyrim
 from mo2_inspection import inspect_mo2, inspect_stl_installation
 from stl_compatibility import install_compatibility_tool, inspect_compatibility_tool
+from mo2_setup import run_mo2_command
 
 STYLE = """
 QWidget { background: #15171b; color: #e5e7eb; font-size: 14px; }
@@ -125,6 +126,12 @@ class MainWindow(QMainWindow):
         refresh = QPushButton("Refresh MO2 detection")
         refresh.clicked.connect(self.refresh_mo2)
         layout.addWidget(refresh)
+        install = QPushButton("Install MO2 via STL")
+        install.clicked.connect(lambda: self.run_mo2_action("install"))
+        layout.addWidget(install)
+        start = QPushButton("Start MO2 standalone")
+        start.clicked.connect(lambda: self.run_mo2_action("start"))
+        layout.addWidget(start)
         layout.addStretch(1)
         return page
 
@@ -138,6 +145,29 @@ class MainWindow(QMainWindow):
             status = "MO2 not detected"
         self.mo2_result = self._replace_card(self.mo2_page, self.mo2_result, card(status, detail))
         self._append_log("MO2 detection: " + status)
+
+    def run_mo2_action(self, command: str) -> None:
+        preview = run_mo2_command(command, dry_run=True)
+        if not preview.get("ok"):
+            QMessageBox.warning(self, "MO2 Setup", preview.get("message", "Preflight failed."))
+            self._append_log("MO2 " + command + " preflight failed: " + preview.get("message", ""))
+            return
+        prompt = ("Install Mod Organizer 2 using STL? This will install into STL's managed MO2 prefix. "
+                  "Detected existing MO2 installs are not overwritten.") if command == "install" else (
+                  "Launch MO2 standalone using STL? This opens MO2 in its own prefix. Create a new instance in MO2 if prompted; "
+                  "the setup app will not copy or migrate existing mods, saves, or profiles.")
+        answer = QMessageBox.question(self, "MO2 " + command.title(), prompt, QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+        if answer != QMessageBox.StandardButton.Yes:
+            self._append_log("MO2 " + command + " cancelled by user.")
+            return
+        result = run_mo2_command(command, dry_run=False)
+        self._append_log("MO2 " + command + ": " + result.get("message", "unknown result"))
+        if result.get("ok"):
+            QMessageBox.information(self, "MO2 Setup", result.get("message", "Completed.") + ("\n\nMO2 is ready to configure an instance." if command == "start" else ""))
+        else:
+            details = result.get("output", "")
+            QMessageBox.warning(self, "MO2 Setup", result.get("message", "Failed.") + ("\n\n" + details if details else ""))
+        self.refresh_mo2()
 
     def compatibility(self) -> QWidget:
         page = QWidget()
