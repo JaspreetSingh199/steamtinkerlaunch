@@ -217,7 +217,7 @@ class MainWindow(QMainWindow):
                 f'Wyrd Proton prefix: {prefix}'
             )
             self.launch_button.setEnabled(bool(self.mo2_state.get("prefix_ready")))
-            self.install_button.setText("Recheck MO2")
+            self.install_button.setText("Recheck MO2" if self.mo2_state.get("prefix_ready") else "Repair MO2 runtime")
             self._log("Wyrd MO2 inspection: verified " + version)
         else:
             external = self.mo2_state.get("external_installations", [])
@@ -244,7 +244,7 @@ class MainWindow(QMainWindow):
         if not proton_path:
             QMessageBox.warning(self, "Wyrd setup", "No compatible Proton build is selected.")
             return
-        if self.mo2_state.get("installed"):
+        if self.mo2_state.get("installed") and self.mo2_state.get("prefix_ready"):
             self.start_mo2()
             return
         answer = QMessageBox.question(
