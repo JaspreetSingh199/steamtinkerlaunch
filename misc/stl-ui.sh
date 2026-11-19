@@ -60,3 +60,10 @@ ui_directory() {
   stl_ui_require || return
   "$STL_UI_DIALOG" --stdout --title "$title" --dselect "$initial" 15 70
 }
+
+ui_gauge() {
+  local title="${1:-Progress}" message="${2:-Working...}" height="${3:-8}" width="${4:-60}"
+  stl_ui_require || return
+  # Dialog's gauge consumes percentage values on stdin; keep its output off stdout.
+  "$STL_UI_DIALOG" --title "$title" --gauge "$message" "$height" "$width" 0
+}
