@@ -182,6 +182,9 @@ class CompatibilityToolTests(unittest.TestCase):
             backup = Path(result["compatibility_backups"][0])
             self.assertEqual(backup.parent, target.parent)
             self.assertTrue((backup / "toolmanifest.vdf").exists())
+            self.assertIn(str(target), result["compatibility_targets"])
+            self.assertIn(str(backup), result["compatibility_backups"])
+            self.assertIn("Restore each compatibility backup", result["recovery_note"])
 
 
     def test_calls_upstream_add_and_verifies_target(self):
