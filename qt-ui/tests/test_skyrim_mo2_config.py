@@ -1,5 +1,6 @@
 import os
 import tempfile
+from unittest.mock import patch
 import unittest
 from pathlib import Path
 from stl_compatibility import (
