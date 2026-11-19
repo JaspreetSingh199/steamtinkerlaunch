@@ -20,6 +20,11 @@ class MainWindowSmokeTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
+    def test_window_is_branded_wyrd(self):
+        window = MainWindow()
+        self.assertEqual(window.windowTitle(), "Wyrd — Skyrim Modding Environment")
+        window.close()
+
     def test_all_navigation_pages_construct_and_switch(self):
         window = MainWindow()
         self.assertEqual(window.nav.count(), 5)
