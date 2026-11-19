@@ -51,7 +51,7 @@ def install_stl_source(home: Path | None = None, *, dry_run: bool = True) -> dic
         return {"ok": False, "dry_run": False, "message": "STL download timed out. The partial directory, if any, was left for inspection.", "target": str(target)}
     except OSError as error:
         return {"ok": False, "dry_run": False, "message": f"Could not start git clone: {error}", "target": str(target)}
-    output = "\\n".join(part for part in (result.stdout, result.stderr) if part).strip()
+    output = "\n".join(part for part in (result.stdout, result.stderr) if part).strip()
     if result.returncode != 0:
         return {"ok": False, "dry_run": False, "message": f"STL clone failed (exit {result.returncode}).", "output": output, "target": str(target)}
     if not executable.is_file():
