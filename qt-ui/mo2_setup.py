@@ -118,6 +118,33 @@ def run_mo2_command(command: str, home: Path | None = None, *, dry_run: bool = T
         return {"ok": False, "dry_run": dry_run,
                 "message": "MO2.exe is already present in a known location. Installation was not started, to protect the existing copy.",
                 "existing": state["executables"]}
+    # Refuse to launch STL MO2 commands when its selected Proton/Wine runtime
+    # is incompatible with the host. STL's config may point at another GE build;
+    # report the exact incompatible binary before any installer process starts.
+    proton_config = Path(os.environ.get("XDG_CONFIG_HOME", home / ".config")) / "steamtinkerlaunch"
+    proton_candidates = [
+        proton_config / "proton" / "custom",
+        proton_config / "proton",
+        home / ".local/share/Steam/compatibilitytools.d",
+    ]
+    incompatible = []
+    for directory in proton_candidates:
+        if not directory.is_dir():
+            continue
+        for proton_dir in directory.iterdir():
+            if not proton_dir.is_dir():
+                continue
+            validation = proton_binary_architecture(proton_dir)
+            if validation.get("binary") and not validation.get("ok"):
+                incompatible.append(validation)
+    if incompatible:
+        detail = "\\n".join(
+            f"{entry['binary']}: {entry['message']}" for entry in incompatible[:5]
+        )
+        return {"ok": False, "dry_run": dry_run,
+                "message": "Incompatible Proton Wine runtime detected. MO2 was not started.\\n" + detail,
+                "next_step": "Select or install a Proton build matching your Linux CPU architecture, then retry. No MO2 data was changed."}
+
     command_line = [str(stl), "mo2", command]
     if dry_run:
         return {"ok": True, "dry_run": True,
