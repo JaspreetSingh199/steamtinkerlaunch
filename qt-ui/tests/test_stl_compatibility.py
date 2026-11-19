@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-from stl_compatibility import (compatibility_tool_targets, find_stl_executable, install_compatibility_tool, inspect_compatibility_tool, inspect_proton_binary, reset_stl_steam)
+from stl_compatibility import (compatibility_tool_targets, find_stl_executable, install_compatibility_tool, inspect_compatibility_tool, reset_stl_steam)
 
 class CompatibilityToolTests(unittest.TestCase):
     def fixture_home(self, root: Path):
