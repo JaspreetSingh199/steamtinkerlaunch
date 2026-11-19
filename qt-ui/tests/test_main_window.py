@@ -6,11 +6,16 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from PySide6.QtWidgets import QApplication
-from main import MainWindow
+try:
+    from PySide6.QtWidgets import QApplication
+    from main import MainWindow
+except ImportError:
+    QApplication = None
+    MainWindow = None
 
 
 class MainWindowSmokeTests(unittest.TestCase):
+    @unittest.skipIf(QApplication is None, "PySide6 is an optional desktop dependency")
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
