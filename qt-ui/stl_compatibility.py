@@ -138,6 +138,66 @@ def install_compatibility_tool(home: Path | None = None, *, dry_run: bool = True
             "message": "STL compat add exited successfully, but its target could not be verified.",
             "output": output, "targets": state["targets"]}
 
+def reset_stl_steam(home: Path | None = None, *, dry_run: bool = True) -> dict:
+    """Safely reset only this app's managed source and STL compat registrations.
+
+    The app source is moved to a timestamped backup, never recursively deleted.
+    MO2/config/prefixes and Steam per-game settings are not touched.
+    """
+    import time
+    home = home or Path.home()
+    data_home = Path(os.environ.get("XDG_DATA_HOME", home / ".local/share"))
+    install_root = data_home / "stl-steam"
+    targets = [target for target in compatibility_tool_targets(home)
+               if target.exists() or target.is_symlink()]
+    backup = install_root.with_name(f"stl-steam.reset-backup-{int(time.time())}")
+    if backup.exists():
+        return {"ok": False, "dry_run": dry_run,
+                "message": "The planned backup path already exists; nothing was changed.",
+                "backup": str(backup)}
+    if dry_run:
+        return {"ok": True, "dry_run": True,
+                "message": "Preview only. The reset will move this app's source directory to a backup and remove only STL compatibility registrations owned by the detected targets.",
+                "install_root": str(install_root) if install_root.exists() else None,
+                "compatibility_targets": [str(path) for path in targets],
+                "backup": str(backup),
+                "preserved": ["Skyrim game files and saves", "MO2 installations, instances, profiles, mods and downloads",
+                              "Proton prefixes", "Steam launch options and per-game configuration",
+                              "STL user configuration and logs outside this app's install directory"]}
+    changed = []
+    try:
+        # First move our own app install to a sibling backup; same filesystem for atomic rename.
+        if install_root.exists() or install_root.is_symlink():
+            os.rename(install_root, backup)
+            changed.append(("source", backup))
+        # Only remove the specifically named STL compatibility directory entries.
+        # Registration is a symlink in supported upstream builds; never recursively delete a real directory.
+        for target in targets:
+            if target.is_symlink():
+                target.unlink()
+                changed.append(("compatibility_link", target))
+            elif target.is_dir():
+                return {"ok": False, "dry_run": False,
+                        "message": "A real directory exists at a Steam compatibility target. It was left untouched because ownership cannot be proven. The app source was backed up if it had already been moved.",
+                        "backup": str(backup) if backup.exists() else None,
+                        "preserved_target": str(target)}
+            else:
+                return {"ok": False, "dry_run": False,
+                        "message": "An unexpected file exists at a Steam compatibility target. It was left untouched.",
+                        "backup": str(backup) if backup.exists() else None,
+                        "preserved_target": str(target)}
+    except OSError as error:
+        return {"ok": False, "dry_run": False,
+                "message": f"Reset stopped safely: {error}",
+                "backup": str(backup) if backup.exists() else None,
+                "changed": [str(path) for _, path in changed]}
+    return {"ok": True, "dry_run": False,
+            "message": "STL-Steam app source was backed up and owned compatibility links were removed. Personal game/MO2/Proton data was not touched.",
+            "backup": str(backup) if backup.exists() else None,
+            "removed_compatibility_links": [str(path) for kind, path in changed if kind == "compatibility_link"],
+            "restart_steam": bool(targets)}
+
+
 def skyrim_game_config_path(home: Path | None = None, app_id: str = "489830") -> Path:
     """Return STL's per-game config location without creating it."""
     home = home or Path.home()
