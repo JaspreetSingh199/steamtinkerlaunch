@@ -116,7 +116,7 @@ class CompatibilityToolTests(unittest.TestCase):
             self.assertFalse(target.is_symlink())
             self.assertEqual(config.read_text(), "MO2MODE=gui")
 
-    def test_reset_refuses_real_compatibility_directory(self):
+    def test_reset_backups_verified_real_compatibility_directory(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             steam, _ = self.fixture_home(home)
@@ -124,13 +124,34 @@ class CompatibilityToolTests(unittest.TestCase):
             install.mkdir(parents=True)
             target = steam / "compatibilitytools.d/SteamTinkerLaunch"
             target.mkdir(parents=True)
+            (target / "compatibilitytool.vdf").write_text("owned marker")
+            (target / "toolmanifest.vdf").write_text("owned marker")
+            marker = target / "preserve.txt"
+            marker.write_text("preserve")
+            result = reset_stl_steam(home, dry_run=False)
+            self.assertTrue(result["ok"], result.get("message"))
+            self.assertFalse(target.exists())
+            backup_target = Path(result["backup"]) / "compatibility-tool-0"
+            self.assertTrue((backup_target / "preserve.txt").exists())
+            self.assertEqual((backup_target / "preserve.txt").read_text(), "preserve")
+
+    def test_reset_refuses_unverified_real_compatibility_directory_before_mutation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            steam, _ = self.fixture_home(home)
+            install = home / ".local/share/stl-steam"
+            install.mkdir(parents=True)
+            (install / "app-marker").write_text("keep")
+            target = steam / "compatibilitytools.d/SteamTinkerLaunch"
+            target.mkdir(parents=True)
             marker = target / "keep"
             marker.write_text("preserve")
             result = reset_stl_steam(home, dry_run=False)
             self.assertFalse(result["ok"])
+            self.assertTrue(install.exists(), "preflight must not move the app before refusing")
             self.assertTrue(marker.exists())
             self.assertEqual(marker.read_text(), "preserve")
-            self.assertTrue(result.get("backup"))
+            self.assertFalse(result.get("backup"))
 
     def test_calls_upstream_add_and_verifies_target(self):
         with tempfile.TemporaryDirectory() as tmp:
