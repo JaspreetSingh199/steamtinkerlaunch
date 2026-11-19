@@ -86,3 +86,86 @@ def install_compatibility_tool(home: Path | None = None, *, dry_run: bool = True
     return {"ok": False, "dry_run": False,
             "message": "STL compat add exited successfully, but its target could not be verified.",
             "output": output, "targets": state["targets"]}
+
+def skyrim_game_config_path(home: Path | None = None, app_id: str = "489830") -> Path:
+    """Return STL's per-game config location without creating it."""
+    home = home or Path.home()
+    data_home = Path(os.environ.get("XDG_CONFIG_HOME", home / ".config"))
+    return data_home / "steamtinkerlaunch" / "games" / app_id / "game.cfg"
+
+
+def inspect_skyrim_mo2_config(home: Path | None = None, app_id: str = "489830") -> dict:
+    path = skyrim_game_config_path(home, app_id)
+    if not path.is_file():
+        return {"exists": False, "path": str(path), "mo2_mode": None, "managed": False}
+    try:
+        text = path.read_text(errors="replace")
+    except OSError as error:
+        return {"exists": True, "path": str(path), "error": str(error), "managed": False}
+    import re
+    match = re.search(r'^\s*MO2MODE\s*=\s*"([^"]*)"', text, re.MULTILINE)
+    return {"exists": True, "path": str(path),
+            "mo2_mode": match.group(1) if match else None, "managed": False}
+
+
+def configure_skyrim_mo2(home: Path | None = None, *, dry_run: bool = True,
+                         mode: str = "gui", app_id: str = "489830") -> dict:
+    """Create only a missing Skyrim STL config; preserve any existing file."""
+    import tempfile
+    import re
+    if mode not in {"gui", "silent"}:
+        return {"ok": False, "dry_run": dry_run, "message": "MO2 mode must be gui or silent."}
+    state = inspect_skyrim_mo2_config(home, app_id)
+    path = Path(state["path"])
+    if state.get("exists"):
+        return {"ok": False, "dry_run": dry_run,
+                "message": "A per-game STL config already exists. It was not changed.",
+                "path": str(path), "mo2_mode": state.get("mo2_mode")}
+    # Refuse a symlinked config target or parent path to avoid writing outside
+    # the user's STL config directory.
+    if path.is_symlink() or any(parent.is_symlink() for parent in path.parents if parent.exists()):
+        return {"ok": False, "dry_run": dry_run, "message": "Symlinked config path detected; refusing to write.", "path": str(path)}
+    content = f'# Managed by STL-Steam. Remove this file to disable this integration.\nMO2MODE="{mode}"\n'
+    if dry_run:
+        return {"ok": True, "dry_run": True, "path": str(path), "content": content,
+                "message": "Would create a new Skyrim-only STL game config."}
+    if path.exists():
+        return {"ok": False, "dry_run": False, "message": "Config appeared before write; refusing to overwrite.", "path": str(path)}
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, temp_name = tempfile.mkstemp(prefix=".game.cfg.", dir=str(path.parent))
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        # Atomic no-clobber publish: hard-link the staged file to destination.
+        os.link(temp_name, path)
+        os.unlink(temp_name)
+    except FileExistsError:
+        return {"ok": False, "dry_run": False, "message": "Config appeared before write; refusing to overwrite.", "path": str(path)}
+    except OSError as error:
+        return {"ok": False, "dry_run": False, "message": f"Could not create Skyrim config: {error}", "path": str(path)}
+    return {"ok": True, "dry_run": False, "path": str(path), "backup": None,
+            "mo2_mode": mode, "message": "Created a new Skyrim-only STL MO2 config. No previous file existed."}
+
+
+def remove_managed_skyrim_mo2_config(home: Path | None = None, app_id: str = "489830") -> dict:
+    """Remove only a config carrying this application's ownership marker."""
+    path = skyrim_game_config_path(home, app_id)
+    if not path.is_file():
+        return {"ok": True, "message": "No Skyrim config exists.", "path": str(path)}
+    try:
+        text = path.read_text(errors="replace")
+    except OSError as error:
+        return {"ok": False, "message": str(error), "path": str(path)}
+    if not text.startswith("# Managed by STL-Steam."):
+        return {"ok": False, "message": "Config is not marked as managed by STL-Steam; it was left untouched.", "path": str(path)}
+    # Rename to a timestamp-independent unique backup instead of deletion.
+    backup = path.with_name("game.cfg.stl-steam-backup")
+    if backup.exists():
+        return {"ok": False, "message": "The reversible backup already exists; refusing to replace it.", "backup": str(backup)}
+    try:
+        os.rename(path, backup)
+    except OSError as error:
+        return {"ok": False, "message": f"Could not move managed config to backup: {error}"}
+    return {"ok": True, "message": "Managed config disabled and preserved as backup.", "backup": str(backup)}

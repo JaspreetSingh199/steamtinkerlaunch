@@ -11,6 +11,7 @@ from skyrim_detection import detect_skyrim
 from mo2_inspection import inspect_mo2, inspect_stl_installation
 from stl_compatibility import install_compatibility_tool, inspect_compatibility_tool
 from mo2_setup import run_mo2_command
+from stl_compatibility import configure_skyrim_mo2, inspect_skyrim_mo2_config, remove_managed_skyrim_mo2_config
 
 STYLE = """
 QWidget { background: #15171b; color: #e5e7eb; font-size: 14px; }
@@ -71,6 +72,7 @@ class MainWindow(QMainWindow):
         self.refresh_detection()
         self.refresh_mo2()
         self.refresh_stl()
+        self.refresh_skyrim_mo2_config()
 
     def overview(self) -> QWidget:
         page = QWidget()
@@ -132,6 +134,16 @@ class MainWindow(QMainWindow):
         start = QPushButton("Start MO2 standalone")
         start.clicked.connect(lambda: self.run_mo2_action("start"))
         layout.addWidget(start)
+        configure = QPushButton("Enable MO2 for Skyrim SE")
+        configure.clicked.connect(self.enable_skyrim_mo2)
+        layout.addWidget(configure)
+        disable = QPushButton("Disable managed Skyrim MO2 config")
+        disable.clicked.connect(self.disable_skyrim_mo2)
+        layout.addWidget(disable)
+        self.skyrim_mo2_status = QLabel("Checking Skyrim per-game MO2 configuration…")
+        self.skyrim_mo2_status.setObjectName("muted")
+        self.skyrim_mo2_status.setWordWrap(True)
+        layout.addWidget(self.skyrim_mo2_status)
         layout.addStretch(1)
         return page
 
@@ -145,6 +157,51 @@ class MainWindow(QMainWindow):
             status = "MO2 not detected"
         self.mo2_result = self._replace_card(self.mo2_page, self.mo2_result, card(status, detail))
         self._append_log("MO2 detection: " + status)
+
+    def refresh_skyrim_mo2_config(self) -> None:
+        state = inspect_skyrim_mo2_config()
+        if state.get("exists"):
+            self.skyrim_mo2_status.setText("Skyrim SE STL MO2 mode: " + str(state.get("mo2_mode") or "not explicitly set") + "\\n" + state["path"])
+        else:
+            self.skyrim_mo2_status.setText("No Skyrim-specific STL MO2 configuration exists. MO2 remains disabled for Skyrim by default.")
+
+    def enable_skyrim_mo2(self) -> None:
+        preview = configure_skyrim_mo2(dry_run=True, mode="gui")
+        if not preview.get("ok"):
+            QMessageBox.warning(self, "Skyrim MO2", preview.get("message", "Preflight failed."))
+            return
+        answer = QMessageBox.question(
+            self, "Enable MO2 for Skyrim SE",
+            "Create a new per-game STL config for AppID 489830 with MO2MODE=gui?\\n\\n"
+            "This does not edit Steam launch options, game files, saves, mods, Proton prefixes, or existing MO2 instances.\\n"
+            "If a per-game config already exists, it will be left untouched. The file can be disabled later from this page.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            self._append_log("Skyrim MO2 config creation cancelled.")
+            return
+        result = configure_skyrim_mo2(dry_run=False, mode="gui")
+        self._append_log("Skyrim MO2 config: " + result.get("message", "unknown result"))
+        if result.get("ok"):
+            QMessageBox.information(self, "Skyrim MO2", result["message"] + "\\n\\nRestart Steam before testing the game launch.")
+        else:
+            QMessageBox.warning(self, "Skyrim MO2", result.get("message", "Could not configure MO2."))
+        self.refresh_skyrim_mo2_config()
+
+    def disable_skyrim_mo2(self) -> None:
+        answer = QMessageBox.question(
+            self, "Disable Skyrim MO2 configuration",
+            "Move only the STL-Steam-managed Skyrim config to a backup file?\\n\\nUnmanaged files are never removed, and the backup will not be overwritten.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        result = remove_managed_skyrim_mo2_config()
+        self._append_log("Disable Skyrim MO2 config: " + result.get("message", "unknown result"))
+        (QMessageBox.information if result.get("ok") else QMessageBox.warning)(self, "Skyrim MO2", result.get("message", "Operation failed."))
+        self.refresh_skyrim_mo2_config()
 
     def run_mo2_action(self, command: str) -> None:
         preview = run_mo2_command(command, dry_run=True)
