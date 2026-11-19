@@ -14,8 +14,8 @@ except ImportError:
     MainWindow = None
 
 
+@unittest.skipIf(QApplication is None, "PySide6 is an optional desktop dependency")
 class MainWindowSmokeTests(unittest.TestCase):
-    @unittest.skipIf(QApplication is None, "PySide6 is an optional desktop dependency")
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
