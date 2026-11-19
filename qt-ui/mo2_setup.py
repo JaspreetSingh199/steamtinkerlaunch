@@ -10,6 +10,35 @@ from stl_compatibility import find_stl_executable
 APP_ID = "489830"
 
 
+def proton_binary_architecture(proton_root: Path) -> dict:
+    """Inspect a Proton wine ELF before asking STL to execute it."""
+    import struct
+    host = os.uname().machine.lower()
+    expected = {"x86_64": {62}, "amd64": {62}, "aarch64": {183}, "arm64": {183}}
+    names = {3: "x86", 40: "ARM", 62: "x86_64", 183: "AArch64"}
+    for relative in ("files/bin/wine", "dist/bin/wine"):
+        binary = proton_root / relative
+        if not binary.is_file():
+            continue
+        try:
+            header = binary.read_bytes()[:20]
+            if len(header) < 20 or header[:4] != bytes([0x7f, 69, 76, 70]):
+                return {"ok": False, "binary": str(binary), "message": "The selected Proton Wine binary is not a valid ELF executable."}
+            endian = "<" if header[5] == 1 else ">" if header[5] == 2 else None
+            if endian is None:
+                return {"ok": False, "binary": str(binary), "message": "The Wine binary has invalid ELF byte order."}
+            machine = struct.unpack(endian + "H", header[18:20])[0]
+            arch = names.get(machine, f"ELF machine {machine}")
+            compatible = machine in expected.get(host, set())
+            return {"ok": compatible, "binary": str(binary), "architecture": arch,
+                    "host_architecture": host,
+                    "message": "Proton Wine architecture matches this host." if compatible else
+                    f"Selected Proton Wine is {arch}; this machine is {host}. Choose a Proton build for {host}."}
+        except OSError as error:
+            return {"ok": False, "binary": str(binary), "message": f"Could not inspect Wine binary: {error}"}
+    return {"ok": False, "message": "No Wine binary found in this Proton distribution."}
+
+
 def mo2_prefix_candidates(home: Path | None = None) -> list[Path]:
     """Potential prefix paths from STL's MO2 defaults, for inspection only."""
     home = home or Path.home()
