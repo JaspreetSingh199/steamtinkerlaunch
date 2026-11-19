@@ -57,3 +57,10 @@ The wrapper should use `dialog` when available, with a clear error and actionabl
 ## Initial scope
 
 The first user-facing target is the Skyrim-focused STL-Steam branch, but the UI foundation should remain reusable across STL rather than hardcoding Skyrim-specific dialog behavior.
+
+## First implementation milestone
+
+- Added `misc/stl-ui.sh` as a small dialog wrapper with message, error, question, menu, checklist, input, file, and directory primitives.
+- Added fake-dialog tests for output capture and cancellation/return-code behavior. CI runs these alongside the Skyrim installer tests.
+- The helper is not wired into the production UI yet. Existing YAD call sites remain unchanged until each category has been migrated and reviewed.
+- The helper's simple primitives are not sufficient to replace STL's dynamic forms and multi-column lists; additional adapter functions and conversion logic will be added before those call sites are migrated.
