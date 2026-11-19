@@ -1,3 +1,4 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -7,6 +8,12 @@ from stl_compatibility import (
 )
 
 class SkyrimMO2ConfigTests(unittest.TestCase):
+    def setUp(self):
+        self.env = patch.dict(os.environ, {"XDG_CONFIG_HOME": str(Path(self._testMethodName + '-config').resolve())})
+        self.env.start()
+
+    def tearDown(self):
+        self.env.stop()
     def test_dry_run_does_not_create_config_or_directories(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
@@ -29,7 +36,7 @@ class SkyrimMO2ConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             path = skyrim_game_config_path(home)
-            path.parent.mkdir(parents=True)
+            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('MO2MODE="disabled"\nCUSTOM="keep"\n')
             before = path.read_bytes()
             result = configure_skyrim_mo2(home, dry_run=False)
