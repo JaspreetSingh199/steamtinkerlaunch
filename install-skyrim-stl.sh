@@ -123,7 +123,7 @@ cp -a "$source_dir/collections" "$source_dir/eval" "$source_dir/guicfgs" "$sourc
 cp "$source_dir/README.md" "$staging_dir/share/doc-STL-Steam.md"
 # Make the main script use the user-local prefix instead of /usr.
 sed -i "s|^PREFIX=\"/usr\"|PREFIX=\"$INSTALL_ROOT\"|" "$staging_dir/bin/steamtinkerlaunch"
-grep -q "^PREFIX=\"$INSTALL_ROOT\"" "$staging_dir/bin/steamtinkerlaunch" || fail "Could not configure user-local prefix in executable."
+grep -Fq "PREFIX=\"$INSTALL_ROOT\"" "$staging_dir/bin/steamtinkerlaunch" || fail "Could not configure user-local prefix in executable."
 chmod +x "$staging_dir/bin/steamtinkerlaunch"
 mv "$staging_dir" "$INSTALL_ROOT"
 staging_dir=""
