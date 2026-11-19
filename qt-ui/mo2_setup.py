@@ -109,14 +109,11 @@ def run_mo2_command(command: str, home: Path | None = None, *, dry_run: bool = T
             shim_dir = home / ".cache/stl-steam/yad-compat/bin"
             shim = shim_dir / "yad"
             real_yad = Path(yad).resolve()
-            script = ("#!/bin/sh\\n"
-                     "set --\\n"
-                     "while [ $# -gt 0 ]; do\\n"
-                     "  case \\"$1\\" in --decorated|--image-on-top) shift ;;\\n"
-                     "  *) set -- \\"$@\\" ;;\\n"
-                     "  esac\\n"
-                     "done\\n"
-                     "exec " + str(real_yad) + " \\"$@\\"\\n")
+            script = ("#!/usr/bin/env python3\\n"
+                     "import os, sys\\n"
+                     "real_yad = " + repr(str(real_yad)) + "\\n"
+                     "args = [arg for arg in sys.argv[1:] if arg not in {'--decorated', '--image-on-top'}]\\n"
+                     "os.execv(real_yad, [real_yad, *args])\\n")
             try:
                 shim_dir.mkdir(parents=True, exist_ok=True)
                 staged = shim.with_suffix(".tmp")
