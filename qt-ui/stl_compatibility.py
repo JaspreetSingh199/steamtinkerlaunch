@@ -93,8 +93,15 @@ def install_compatibility_tool(home: Path | None = None, *, dry_run: bool = True
     targets = compatibility_tool_targets(home)
     existing = [p for p in targets if p.exists() or p.is_symlink()]
     if existing:
+        verified = [p for p in existing if p.is_dir() and
+                    (p / "compatibilitytool.vdf").is_file() and
+                    (p / "toolmanifest.vdf").is_file()]
+        if len(verified) == len(existing):
+            return {"ok": True, "dry_run": dry_run,
+                    "message": "STL compatibility tool is already registered and verified. Nothing was changed.",
+                    "existing": [str(p) for p in verified], "already_installed": True}
         return {"ok": False, "dry_run": dry_run,
-                "message": "An STL compatibility-tool directory already exists. It was left untouched.",
+                "message": "An unverified STL compatibility-tool entry already exists. It was left untouched.",
                 "existing": [str(p) for p in existing]}
     executable = find_stl_executable(home)
     if executable is None:
