@@ -1,8 +1,9 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-from mo2_setup import inspect_mo2_installation, run_mo2_command
+from mo2_setup import inspect_mo2_installation, mo2_executable_candidates, run_mo2_command
 
 class MO2SetupTests(unittest.TestCase):
     def fixture(self, home: Path):
@@ -48,9 +49,10 @@ class MO2SetupTests(unittest.TestCase):
                 target.parent.mkdir(parents=True)
                 target.write_bytes(b"fixture")
                 return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
-            with patch("mo2_setup.subprocess.run", side_effect=fake_run):
-                result = run_mo2_command("install", home, dry_run=False)
-            self.assertTrue(result["ok"])
+            with patch.dict(os.environ, {"XDG_CONFIG_HOME": str(home / ".config")}):
+                with patch("mo2_setup.subprocess.run", side_effect=fake_run):
+                    result = run_mo2_command("install", home, dry_run=False)
+            self.assertTrue(result["ok"], result)
             self.assertTrue(target.exists())
 
 if __name__ == "__main__":
