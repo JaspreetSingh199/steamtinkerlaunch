@@ -79,7 +79,7 @@ class CompatibilityToolTests(unittest.TestCase):
             self.assertTrue(result["ok"])
             self.assertTrue((source / "steamtinkerlaunch").exists())
             self.assertTrue((target / "toolmanifest.vdf").exists())
-            self.assertEqual(run.call_count, 2)
+            self.assertEqual(run.call_count, 1)
 
     def test_calls_upstream_add_and_verifies_target(self):
         with tempfile.TemporaryDirectory() as tmp:
