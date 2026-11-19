@@ -281,7 +281,7 @@ class MainWindow(QMainWindow):
         refresh = QPushButton("Refresh STL detection")
         refresh.clicked.connect(self.refresh_stl)
         layout.addWidget(refresh)
-        bootstrap = QPushButton("Install / Update STL-Steam")
+        bootstrap = QPushButton("Install STL-Steam")
         bootstrap.clicked.connect(self.install_stl_steam_bootstrap)
         layout.addWidget(bootstrap)
         self.bootstrap_status = QLabel("STL-Steam application installer status: idle")
@@ -306,7 +306,7 @@ class MainWindow(QMainWindow):
             return
         answer = QMessageBox.question(
             self, "Install STL-Steam",
-            "Run the bundled installer to detect Steam and Skyrim SE, then download STL-Steam into your user-local data directory.\\n\\n"
+            "Run the bundled project installer to detect Steam and Skyrim SE, then download this STL-Steam project into your user-local data directory.\\n\\n"
             "This does not change Steam launch options, Skyrim files, saves, mods, or existing MO2 instances.\\n\\nContinue?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
