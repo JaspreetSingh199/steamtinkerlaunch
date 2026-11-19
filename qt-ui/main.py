@@ -320,15 +320,15 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Remove & Reset STL-Steam", preview.get("message", "Reset preflight failed."))
             self._append_log("Reset preflight failed: " + preview.get("message", ""))
             return
-        targets = "\\n".join(preview.get("compatibility_targets", [])) or "(No compatibility registration detected)"
+        targets = "\n".join(preview.get("compatibility_targets", [])) or "(No compatibility registration detected)"
         backup = preview.get("backup") or "(No existing app directory)"
         details = (
-            "This will remove only STL-Steam-managed application files and verified Steam compatibility links.\\n\\n"
-            "App source: " + str(preview.get("install_root") or "(Not installed)") + "\\n"
-            "Backup: " + backup + "\\n"
-            "Steam compatibility targets: " + targets + "\\n\\n"
+            "This will remove only STL-Steam-managed application files and verified Steam compatibility links.\n\n"
+            "App source: " + str(preview.get("install_root") or "(Not installed)") + "\n"
+            "Backup: " + backup + "\n"
+            "Steam compatibility targets: " + targets + "\n\n"
             "It will NOT remove Skyrim, saves, mods, MO2 instances/profiles/downloads, Proton prefixes, "
-            "STL user configuration, or Steam launch settings.\\n\\nContinue?"
+            "STL user configuration, or Steam launch settings.\n\nContinue?"
         )
         answer = QMessageBox.question(
             self, "Remove & Reset STL-Steam", details,
@@ -343,10 +343,10 @@ class MainWindow(QMainWindow):
         if result.get("backup"):
             self._append_log("Reset backup: " + result["backup"])
         if result.get("ok"):
-            note = "\\n\\nExit and restart Steam to refresh its compatibility-tool list." if result.get("restart_steam") else ""
+            note = "\n\nExit and restart Steam to refresh its compatibility-tool list." if result.get("restart_steam") else ""
             QMessageBox.information(self, "Remove & Reset STL-Steam", result.get("message", "Reset complete.") + note)
         else:
-            QMessageBox.warning(self, "Remove & Reset STL-Steam", result.get("message", "Reset stopped.") + "\\n\\nPersonal game/MO2 data was not intentionally modified.")
+            QMessageBox.warning(self, "Remove & Reset STL-Steam", result.get("message", "Reset stopped.") + "\n\nPersonal game/MO2 data was not intentionally modified.")
         self.refresh_stl()
 
     def install_stl_steam_bootstrap(self) -> None:
