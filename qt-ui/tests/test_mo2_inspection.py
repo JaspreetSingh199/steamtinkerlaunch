@@ -1,10 +1,17 @@
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from mo2_inspection import find_mo2_installations, inspect_mo2, inspect_stl_installation, inspect_skyrim_compatibility
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from mo2_inspection import (
+    find_mo2_installations,
+    inspect_mo2,
+    inspect_stl_installation,
+    inspect_skyrim_compatibility,
+)
 
 
 class MO2InspectionTests(unittest.TestCase):
