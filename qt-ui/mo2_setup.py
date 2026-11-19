@@ -83,7 +83,7 @@ def run_mo2_command(command: str, home: Path | None = None, *, dry_run: bool = T
             "message": f"STL MO2 {command} command completed and MO2 was verified." if command == "install" else "STL MO2 start command completed.",
             "output": result["output"], "executables": after["executables"],
             "candidates": after["candidates"],
-            "verification": "MO2 executable detected in a common path." if command == "install" else "STL command exit status."}}
+            "verification": "MO2 executable detected in a common path." if command == "install" else "STL command exit status."}
 
 
 def inspect_skyrim_mo2_instance(home: Path | None = None) -> dict:
