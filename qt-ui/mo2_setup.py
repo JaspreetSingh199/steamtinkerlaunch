@@ -76,34 +76,35 @@ def inspect_mo2_instance_list(home: Path | None = None) -> dict:
 
 
 def run_mo2_command(command: str, home: Path | None = None, *, dry_run: bool = True) -> dict:
-    """Run STL's MO2 CLI in an attached terminal so its interactive installer is visible."""
+    """Prepare a visible STL MO2 command; GUI commands must not be captured into a hidden subprocess."""
     if command not in {"install", "start"}:
         return {"ok": False, "dry_run": dry_run, "message": "Unsupported MO2 command."}
     home = home or Path.home()
     stl = find_stl_executable(home)
     if stl is None:
         return {"ok": False, "dry_run": dry_run,
-                "message": "SteamTinkerLaunch is not installed. Install STL-Steam from the Compatibility page first."}
+                "message": "SteamTinkerLaunch executable was not found. Install it from Compatibility first."}
     state = inspect_mo2_installation(home)
     if command == "install" and state["installed"]:
         return {"ok": False, "dry_run": dry_run,
-                "message": "MO2 executable is already present. To avoid overwriting your existing installation, installation was not started.",
+                "message": "MO2.exe is already present in a known location. Installation was not started, to protect the existing copy.",
                 "existing": state["executables"]}
+    command_line = [str(stl), "mo2", command]
     if dry_run:
         return {"ok": True, "dry_run": True,
-                "message": f"Ready to launch STL's visible MO2 {command} command.",
-                "command": [str(stl), "mo2", command]}
+                "message": f"Ready to start STL's visible MO2 {command} window.",
+                "command": command_line}
     try:
-        result = subprocess.Popen([str(stl), "mo2", command],
-                                  stdin=None, stdout=None, stderr=None,
-                                  start_new_session=True)
+        process = subprocess.Popen(command_line, stdin=None, stdout=None, stderr=None,
+                                   start_new_session=True)
     except OSError as error:
         return {"ok": False, "dry_run": False,
-                "message": f"Could not launch STL's MO2 {command} window: {error}"}
+                "message": f"Could not start STL's MO2 {command} process: {error}",
+                "next_step": "Check that the executable exists and is marked executable. No MO2 data was changed by this app."}
     return {"ok": True, "dry_run": False,
-            "message": f"STL's MO2 {command} command was started in a separate process (PID {result.pid}). Its UI/output should appear independently; this does not mean installation has completed.",
-            "pid": result.pid, "command": [str(stl), "mo2", command],
-            "verification": "Started only. Verify MO2 with STL's installed-instance list after it finishes."}
+            "message": f"Started STL's MO2 {command} process (PID {process.pid}). The installer window/output should be visible separately. This confirms start only, not installation completion.",
+            "pid": process.pid, "command": command_line,
+            "verification": "Not yet verified. After the visible process completes, use Check Skyrim MO2 instance."}
 
 
 def inspect_skyrim_mo2_instance(home: Path | None = None) -> dict:
