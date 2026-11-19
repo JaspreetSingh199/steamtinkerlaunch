@@ -57,7 +57,7 @@ def find_mo2_installations(home: Path | None = None) -> list[Path]:
 
 
 def inspect_stl_installation(home: Path | None = None) -> dict:
-    """Inspect the user-local STL install, PATH, and common compatibility-tool folders."""
+    """Inspect STL executable and Steam compatibility-tool registration without modifying anything."""
     home = home or Path.home()
     data_home = Path(os.environ.get("XDG_DATA_HOME", home / ".local/share"))
     local_install = data_home / "stl-steam"
@@ -65,11 +65,10 @@ def inspect_stl_installation(home: Path | None = None) -> dict:
         home / "stl/prefix/steamtinkerlaunch",
         local_install / "steamtinkerlaunch",
         local_install / "bin/steamtinkerlaunch",
-        home / ".steam/root/compatibilitytools.d/SteamTinkerLaunch/steamtinkerlaunch",
-        home / ".local/share/Steam/compatibilitytools.d/SteamTinkerLaunch/steamtinkerlaunch",
-        home / ".steam/steam/compatibilitytools.d/SteamTinkerLaunch/steamtinkerlaunch",
-        home / ".var/app/com.valvesoftware.Steam/.local/share/Steam/compatibilitytools.d/SteamTinkerLaunch/steamtinkerlaunch",
     ]
+    steam_roots = find_steam_roots(home)
+    compat_dirs = [root / "compatibilitytools.d/SteamTinkerLaunch" for root in steam_roots]
+    candidates.extend(directory / "steamtinkerlaunch" for directory in compat_dirs)
     path_executable = shutil.which("steamtinkerlaunch")
     if path_executable:
         candidates.append(Path(path_executable))
@@ -79,11 +78,12 @@ def inspect_stl_installation(home: Path | None = None) -> dict:
             resolved = candidate.resolve()
             if resolved not in existing:
                 existing.append(resolved)
+    compat_present = any(directory.exists() or directory.is_symlink() for directory in compat_dirs)
     return {
         "installed": bool(existing),
         "executables": [str(path) for path in existing],
         "local_install": str(local_install),
-        "compatibility_tool_present": any("compatibilitytools.d" in str(p) for p in existing),
+        "compatibility_tool_present": compat_present,
     }
 
 
