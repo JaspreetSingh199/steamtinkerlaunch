@@ -58,7 +58,7 @@ class MO2InspectionTests(unittest.TestCase):
     def test_reports_existing_stl_executable(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
-            executable = home / ".local/share/Steam/compatibilitytools.d/SteamTinkerLaunch/steamtinkerlaunch"
+            executable = home / ".steam/steam/compatibilitytools.d/SteamTinkerLaunch/steamtinkerlaunch"
             executable.parent.mkdir(parents=True)
             executable.write_text("#!/bin/sh\n")
             executable.chmod(0o755)
@@ -73,7 +73,7 @@ class MO2InspectionTests(unittest.TestCase):
             source.parent.mkdir(parents=True)
             source.write_text("#!/bin/sh\\n")
             source.chmod(0o755)
-            compat = home / ".local/share/Steam/compatibilitytools.d/SteamTinkerLaunch"
+            compat = home / ".steam/steam/compatibilitytools.d/SteamTinkerLaunch"
             compat.mkdir(parents=True)
             (compat / "steamtinkerlaunch").symlink_to(source)
             result = inspect_stl_installation(home)
