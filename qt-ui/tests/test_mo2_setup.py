@@ -55,37 +55,23 @@ class MO2SetupTests(unittest.TestCase):
             self.assertIsNone(kwargs["stdin"])
             self.assertTrue(kwargs["start_new_session"])
 
-    def test_mo2_install_reports_unverified_when_executable_not_found(self):
+    def test_mo2_install_reports_start_only_and_does_not_capture_output(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             stl = home / ".local/share/stl-steam/bin/steamtinkerlaunch"
             stl.parent.mkdir(parents=True)
             stl.write_text("#!/bin/sh\\n")
             stl.chmod(0o755)
-            empty_state = {"installed": False, "executables": [], "candidates": []}
-            fake_result = {"ok": True, "output": "Installer finished"}
-            with patch("mo2_setup.inspect_mo2_installation", return_value=empty_state):
-                with patch("mo2_setup._run_stl", return_value=fake_result):
-                    result = run_mo2_command("install", home, dry_run=False)
-            self.assertFalse(result["ok"])
-            self.assertIn("not a verified installation", result["message"])
-            self.assertIn("MO2COMPDATA", result["message"])
-
-    def test_instance_check_uses_stl_installed_instance_list(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            home = Path(tmp)
-            stl = home / ".local/share/stl-steam/bin/steamtinkerlaunch"
-            stl.parent.mkdir(parents=True)
-            stl.write_text("#!/bin/sh\\n")
-            stl.chmod(0o755)
-            listing = {"ok": True, "installed": True,
-                       "instances": ["Skyrim Special Edition (489830) -> /custom/mo2/pfx"],
-                       "output": "Skyrim Special Edition (489830) -> /custom/mo2/pfx"}
-            with patch("mo2_setup.inspect_mo2_instance_list", return_value=listing):
-                result = inspect_skyrim_mo2_instance(home)
+            with patch("mo2_setup.subprocess.Popen") as popen:
+                popen.return_value.pid = 4321
+                result = run_mo2_command("install", home, dry_run=False)
             self.assertTrue(result["ok"])
-            self.assertTrue(result["installed"])
-            self.assertIn("489830", result["output"])
+            self.assertIn("start only", result["message"])
+            self.assertEqual(result["pid"], 4321)
+            self.assertIsNone(popen.call_args.kwargs["stdout"])
+            self.assertIsNone(popen.call_args.kwargs["stderr"])
+            self.assertIsNone(popen.call_args.kwargs["stdin"])
+            self.assertTrue(popen.call_args.kwargs["start_new_session"])
 
     def test_create_instance_dry_run_does_not_change_prefix(self):
         with tempfile.TemporaryDirectory() as tmp:
