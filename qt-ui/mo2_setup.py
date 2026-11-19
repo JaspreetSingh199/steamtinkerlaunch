@@ -107,19 +107,19 @@ def run_mo2_command(command: str, home: Path | None = None, *, dry_run: bool = T
 
 
 def inspect_skyrim_mo2_instance(home: Path | None = None) -> dict:
-    home = home or Path.home()
-    stl = find_stl_executable(home)
-    if stl is None:
-        return {"ok": False, "message": "STL executable not found."}
-    try:
-        result = subprocess.run([str(stl), "mo2", "list-installed"], check=False,
-                                capture_output=True, text=True, timeout=90)
-    except (OSError, subprocess.TimeoutExpired) as error:
-        return {"ok": False, "message": f"Could not list installed MO2 instances: {error}"}
-    output = "\n".join(part for part in (result.stdout, result.stderr) if part).strip()
-    found = any("(489830)" in line for line in output.splitlines())
-    return {"ok": result.returncode == 0, "installed": found, "output": output,
-            "message": "Skyrim SE MO2 instance detected." if found else "No Skyrim SE MO2 instance listed by STL."}
+    state = inspect_mo2_instance_list(home)
+    if not state.get("ok"):
+        return {"ok": False, "installed": False,
+                "message": state.get("message", "Could not inspect MO2 instances."),
+                "output": state.get("output", "")}
+    skyrim_entries = [line for line in state.get("instances", []) if "(489830)" in line]
+    found = bool(skyrim_entries)
+    return {"ok": True, "installed": found, "output": state.get("output", ""),
+            "instances": state.get("instances", []),
+            "message": "Skyrim SE MO2 instance detected." if found else (
+                "STL is working, but it does not list a Skyrim SE MO2 instance yet. "
+                "Next: open MO2 standalone, create/select the Skyrim Special Edition instance, then check again."
+            )}
 
 
 def create_skyrim_mo2_instance(home: Path | None = None, *, dry_run: bool = True) -> dict:
