@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
 from skyrim_detection import detect_skyrim
 from mo2_inspection import inspect_mo2, inspect_stl_installation
 from stl_compatibility import install_compatibility_tool, inspect_compatibility_tool
-from mo2_setup import run_mo2_command, create_skyrim_mo2_instance, inspect_skyrim_mo2_instance
+from mo2_setup import run_mo2_command, create_skyrim_mo2_instance, inspect_skyrim_mo2_instance, proton_binary_architecture
 from stl_compatibility import configure_skyrim_mo2, inspect_skyrim_mo2_config, remove_managed_skyrim_mo2_config
 
 STYLE = """
@@ -121,7 +121,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(page)
         heading = QLabel("MO2 Setup")
         heading.setObjectName("heading")
-        intro = QLabel("Read-only discovery of existing Mod Organizer 2 installs. No instance, prefix, save, or mod files are changed.")
+        intro = QLabel("Manage MO2 as a separate application in a dedicated Proton environment. Existing game files, prefixes, profiles, mods and downloads are never reset by this tool.")
         intro.setObjectName("muted")
         intro.setWordWrap(True)
         layout.addWidget(heading)
@@ -131,7 +131,7 @@ class MainWindow(QMainWindow):
         refresh = QPushButton("Refresh MO2 detection")
         refresh.clicked.connect(self.refresh_mo2)
         layout.addWidget(refresh)
-        install = QPushButton("Install MO2 via STL")
+        install = QPushButton("Install MO2 (STL-managed)")
         install.clicked.connect(lambda: self.run_mo2_action("install"))
         layout.addWidget(install)
         start = QPushButton("Start MO2 standalone")
@@ -263,8 +263,8 @@ class MainWindow(QMainWindow):
             message = result.get("message", "Command started.")
             QMessageBox.information(
                 self, "MO2 Setup",
-                message + "\n\nIMPORTANT: This confirms only that STL's MO2 process was started. "
-                "It does NOT mean MO2 has finished installing. Complete any installer window that appears, "
+                message + "\n\nIMPORTANT: This confirms only that the STL process was started. "
+                "It does NOT mean MO2 has finished installing. If no installer window appears, inspect Logs for the Proton/Wine launch error. "
                 "then click 'Check Skyrim MO2 instance' here. Do not click Install again while the installer is open."
             )
         else:
