@@ -133,10 +133,26 @@ def run_mo2_command(command: str, home: Path | None = None, *, dry_run: bool = T
             configured_name = match.group(1) if match else None
         except OSError:
             configured_name = None
-    if configured_name and "aarch64" in configured_name.lower():
-        return {"ok": False, "dry_run": dry_run,
-                "message": f"STL is configured to use {configured_name}, an ARM64 Proton build. MO2 was not started.",
-                "next_step": "Choose an x86_64 Proton distribution in SteamTinkerLaunch, then retry. No MO2 data was changed."}
+    configured_proton = None
+    if configured_name:
+        proton_roots = [
+            home / ".local/share/Steam/compatibilitytools.d",
+            home / ".steam/root/compatibilitytools.d",
+            home / ".steam/steam/compatibilitytools.d",
+            Path(os.environ.get("XDG_DATA_HOME", home / ".local/share")) / "Steam/compatibilitytools.d",
+        ]
+        for root in proton_roots:
+            candidate = root / configured_name
+            if candidate.is_dir():
+                configured_proton = candidate
+                break
+    if configured_proton:
+        validation = proton_binary_architecture(configured_proton)
+        if not validation.get("ok"):
+            return {"ok": False, "dry_run": dry_run,
+                    "message": "Configured Proton runtime is incompatible. MO2 was not started. " + validation.get("message", ""),
+                    "binary": validation.get("binary"),
+                    "next_step": "Select a Proton distribution matching this machine CPU architecture, then retry. No MO2 data was changed."}
 
     command_line = [str(stl), "mo2", command]
     if dry_run:
