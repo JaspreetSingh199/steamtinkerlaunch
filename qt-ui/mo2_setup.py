@@ -150,5 +150,9 @@ def create_skyrim_mo2_instance(home: Path | None = None, *, dry_run: bool = True
                 "message": "STL created and verified the Skyrim SE MO2 instance.",
                 "output": result["output"], "instance": after["output"]}
     return {"ok": False, "dry_run": False,
-            "message": "STL command completed, but its installed-instance list does not show AppID 489830.",
+            "message": (
+                "STL completed the create-instance command, but its own installed-instance list still does not contain Skyrim SE (AppID 489830).\n\n"
+                "Next: open MO2 standalone and create/select the Skyrim Special Edition instance there, then use 'Check Skyrim MO2 instance' again.\n"
+                "No existing game files, saves, mods or MO2 instances were deleted."
+            ),
             "output": result["output"], "verification": after.get("output", after.get("message"))}
