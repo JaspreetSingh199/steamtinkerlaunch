@@ -43,6 +43,18 @@ class MO2InspectionTests(unittest.TestCase):
             self.assertFalse(result["installed"])
             self.assertFalse(data.exists())
 
+    def test_detects_stl_installed_by_app(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            executable = home / "stl/prefix/steamtinkerlaunch"
+            executable.parent.mkdir(parents=True)
+            executable.write_text("#!/bin/sh\\n")
+            executable.chmod(0o755)
+            result = inspect_stl_installation(home)
+            self.assertTrue(result["installed"])
+            self.assertIn(str(executable.resolve()), result["executables"])
+            self.assertFalse(result["compatibility_tool_present"])
+
     def test_reports_existing_stl_executable(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
