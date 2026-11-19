@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import sys
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QApplication, QFrame, QLabel, QListWidget, QMainWindow, QPushButton,
-    QStackedWidget, QVBoxLayout, QHBoxLayout, QWidget,
+    QStackedWidget, QVBoxLayout, QHBoxLayout, QWidget, QPlainTextEdit,
 )
 from skyrim_detection import detect_skyrim
+from mo2_inspection import inspect_mo2, inspect_stl_installation
 
 STYLE = """
 QWidget { background: #15171b; color: #e5e7eb; font-size: 14px; }
@@ -56,14 +56,19 @@ class MainWindow(QMainWindow):
         self.detection_page = self.detection()
         self.pages.addWidget(self.overview_page)
         self.pages.addWidget(self.detection_page)
-        self.pages.addWidget(self.placeholder("MO2 Setup", "MO2 installation and instance setup will be enabled after the safe, per-game configuration path is verified."))
-        self.pages.addWidget(self.placeholder("Compatibility", "Compatibility settings will be read first. Existing settings will never be silently overwritten."))
-        self.pages.addWidget(self.placeholder("Logs", "Installer and STL-Steam logs will be displayed here."))
+        self.mo2_page = self.mo2_setup()
+        self.compatibility_page = self.compatibility()
+        self.logs_page = self.logs()
+        self.pages.addWidget(self.mo2_page)
+        self.pages.addWidget(self.compatibility_page)
+        self.pages.addWidget(self.logs_page)
         self.nav.currentRowChanged.connect(self.pages.setCurrentIndex)
         row.addWidget(self.nav)
         row.addWidget(self.pages, 1)
         self.setCentralWidget(root)
         self.refresh_detection()
+        self.refresh_mo2()
+        self.refresh_stl()
 
     def overview(self) -> QWidget:
         page = QWidget()
@@ -104,17 +109,102 @@ class MainWindow(QMainWindow):
         layout.addStretch(1)
         return page
 
+    def mo2_setup(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        heading = QLabel("MO2 Setup")
+        heading.setObjectName("heading")
+        intro = QLabel("Read-only discovery of existing Mod Organizer 2 installs. No instance, prefix, save, or mod files are changed.")
+        intro.setObjectName("muted")
+        intro.setWordWrap(True)
+        layout.addWidget(heading)
+        layout.addWidget(intro)
+        self.mo2_result = card("Mod Organizer 2", "Checking known locations…")
+        layout.addWidget(self.mo2_result)
+        refresh = QPushButton("Refresh MO2 detection")
+        refresh.clicked.connect(self.refresh_mo2)
+        layout.addWidget(refresh)
+        layout.addStretch(1)
+        return page
+
+    def refresh_mo2(self) -> None:
+        result = inspect_mo2()
+        if result["found"]:
+            detail = "Existing installation(s):\n" + "\n".join(result["installations"]) + "\n\nNo changes made."
+            status = "MO2 installation found"
+        else:
+            detail = "No MO2 installation found in the common locations.\n\nNo folders were created and no existing data was changed."
+            status = "MO2 not detected"
+        self.mo2_result = self._replace_card(self.mo2_page, self.mo2_result, card(status, detail))
+        self._append_log("MO2 detection: " + status)
+
+    def compatibility(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        heading = QLabel("Compatibility")
+        heading.setObjectName("heading")
+        intro = QLabel("STL is intended to be selected as the Steam Compatibility Tool for Proton games. This page only checks for a user-local STL executable; it does not change Steam settings.")
+        intro.setObjectName("muted")
+        intro.setWordWrap(True)
+        layout.addWidget(heading)
+        layout.addWidget(intro)
+        self.stl_result = card("SteamTinkerLaunch", "Checking user-local and compatibility-tools locations…")
+        layout.addWidget(self.stl_result)
+        refresh = QPushButton("Refresh STL detection")
+        refresh.clicked.connect(self.refresh_stl)
+        layout.addWidget(refresh)
+        self.launch_note = QLabel("Steam launch configuration is not modified by this prototype.")
+        self.launch_note.setObjectName("muted")
+        self.launch_note.setWordWrap(True)
+        layout.addWidget(self.launch_note)
+        layout.addStretch(1)
+        return page
+
+    def refresh_stl(self) -> None:
+        result = inspect_stl_installation()
+        if result["installed"]:
+            detail = "Executable(s):\n" + "\n".join(result["executables"])
+            detail += "\n\nCompatibility-tool directory detected: " + ("Yes" if result["compatibility_tool_present"] else "No")
+            status = "STL executable detected"
+        else:
+            detail = "No executable found in the user-local install, PATH, or common compatibility-tools directories."
+            status = "STL not detected"
+        self.stl_result = self._replace_card(self.compatibility_page, self.stl_result, card(status, detail))
+        self._append_log("STL detection: " + status)
+
+    def logs(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        heading = QLabel("Logs")
+        heading.setObjectName("heading")
+        intro = QLabel("Session diagnostics from read-only inspection. No external log files are collected yet.")
+        intro.setObjectName("muted")
+        intro.setWordWrap(True)
+        layout.addWidget(heading)
+        layout.addWidget(intro)
+        self.log_view = QPlainTextEdit()
+        self.log_view.setReadOnly(True)
+        self.log_view.setPlaceholderText("Run a detection refresh to populate diagnostics.")
+        self.log_view.setMaximumBlockCount(500)
+        layout.addWidget(self.log_view, 1)
+        return page
+
     def refresh_detection(self) -> None:
         result = detect_skyrim()
         if result.get("found"):
-            detail = "Detected at:\\n" + result["game_dir"] + "\\n\\nSteam root: " + result["steam_root"]
+            detail = "Detected at:\n" + result["game_dir"] + "\n\nSteam root: " + result["steam_root"]
             status = "Skyrim Special Edition detected"
         else:
             roots = result.get("steam_roots", [])
-            detail = "Skyrim SE (AppID 489830) was not found.\\n\\nSteam roots checked:\\n" + ("\\n".join(roots) if roots else "No standard Steam installation found.")
+            detail = "Skyrim SE (AppID 489830) was not found.\n\nSteam roots checked:\n" + ("\n".join(roots) if roots else "No standard Steam installation found.")
             status = "Skyrim not detected"
         self.detect_result = self._replace_card(self.detection_page, self.detect_result, card(status, detail))
         self.game_summary = self._replace_card(self.overview_page, self.game_summary, card(status, detail))
+        self._append_log("Game detection: " + status + (" — " + result["game_dir"] if result.get("found") else ""))
+
+    def _append_log(self, message: str) -> None:
+        if hasattr(self, "log_view"):
+            self.log_view.appendPlainText(message)
 
     @staticmethod
     def _replace_card(page: QWidget, old: QFrame, new: QFrame) -> QFrame:
