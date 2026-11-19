@@ -73,11 +73,17 @@ def run_mo2_command(command: str, home: Path | None = None, *, dry_run: bool = T
     if not result["ok"]:
         return {**result, "dry_run": False}
     after = inspect_mo2_installation(home)
+    if command == "install" and not after["installed"]:
+        return {"ok": False, "dry_run": False,
+                "message": "STL reported that MO2 installation completed, but MO2.exe was not found in the paths this app checks. This is not a verified installation. Check the Logs output, then use STL's MO2 list-installed command or inspect its configured MO2COMPDATA path.",
+                "output": result["output"], "executables": after["executables"],
+                "candidates": after["candidates"],
+                "verification": "STL command exit status only; MO2 executable not verified."}
     return {"ok": True, "dry_run": False,
-            "message": f"STL MO2 {command} command returned success; common-path discovery: {len(after['executables'])} executable(s).",
+            "message": f"STL MO2 {command} command completed and MO2 was verified." if command == "install" else "STL MO2 start command completed.",
             "output": result["output"], "executables": after["executables"],
             "candidates": after["candidates"],
-            "verification": "STL command exit status; custom MO2COMPDATA may use another path."}
+            "verification": "MO2 executable detected in a common path." if command == "install" else "STL command exit status."}}
 
 
 def inspect_skyrim_mo2_instance(home: Path | None = None) -> dict:
