@@ -66,6 +66,20 @@ class MO2InspectionTests(unittest.TestCase):
             self.assertTrue(result["installed"])
             self.assertTrue(result["compatibility_tool_present"])
 
+    def test_compat_registration_detected_when_executable_symlink_resolves_outside(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            source = home / "stl/prefix/steamtinkerlaunch"
+            source.parent.mkdir(parents=True)
+            source.write_text("#!/bin/sh\\n")
+            source.chmod(0o755)
+            compat = home / ".local/share/Steam/compatibilitytools.d/SteamTinkerLaunch"
+            compat.mkdir(parents=True)
+            (compat / "steamtinkerlaunch").symlink_to(source)
+            result = inspect_stl_installation(home)
+            self.assertTrue(result["installed"])
+            self.assertTrue(result["compatibility_tool_present"])
+
     def test_reads_existing_steam_config_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             steam = Path(tmp) / ".local/share/Steam"
