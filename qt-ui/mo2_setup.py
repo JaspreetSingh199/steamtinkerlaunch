@@ -131,7 +131,7 @@ def run_mo2_command(command: str, home: Path | None = None, *, dry_run: bool = T
             for line in config_text.splitlines():
                 key, separator, value = line.partition("=")
                 if separator and key.strip().upper() in {"PROTON", "PROTONVERSION", "CUPROTON"}:
-                    configured_name = value.strip().strip('"').strip("'")
+                    configured_name = value.strip().strip(chr(34)).strip(chr(39))
                     break
         except OSError:
             configured_name = None
