@@ -37,6 +37,22 @@ class MO2SetupTests(unittest.TestCase):
             self.assertFalse(result["ok"])
             self.assertEqual(exe.read_bytes(), b"preserve")
 
+    def test_mo2_install_reports_unverified_when_executable_not_found(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            stl = home / ".local/share/stl-steam/bin/steamtinkerlaunch"
+            stl.parent.mkdir(parents=True)
+            stl.write_text("#!/bin/sh\\n")
+            stl.chmod(0o755)
+            empty_state = {"installed": False, "executables": [], "candidates": []}
+            fake_result = {"ok": True, "output": "Installer finished"}
+            with patch("mo2_setup.inspect_mo2_installation", return_value=empty_state):
+                with patch("mo2_setup._run_stl", return_value=fake_result):
+                    result = run_mo2_command("install", home, dry_run=False)
+            self.assertFalse(result["ok"])
+            self.assertIn("not a verified installation", result["message"])
+            self.assertIn("MO2COMPDATA", result["message"])
+
     def test_create_instance_dry_run_does_not_change_prefix(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
