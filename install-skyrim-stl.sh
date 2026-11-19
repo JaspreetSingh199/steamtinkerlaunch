@@ -104,6 +104,17 @@ archive="$tmpdir/stl-steam.tar.gz"
 url="$REPO/archive/refs/heads/$BRANCH.tar.gz"
 note "Downloading STL-Steam branch archive..."
 curl --fail --location --silent --show-error "$url" -o "$archive"
+
+# Validate archive paths before extraction. Reject absolute paths, parent traversal,
+# and unexpected top-level layout to avoid extracting arbitrary files.
+archive_entries="$(tar -tzf "$archive")" || fail "Downloaded archive is not a valid gzip tarball."
+while IFS= read -r entry; do
+  [[ -n "$entry" ]] || continue
+  [[ "$entry" != /* ]] || fail "Unsafe absolute path in archive: $entry"
+  [[ "$entry" != *".."* ]] || fail "Unsafe parent traversal path in archive: $entry"
+  [[ "$entry" == steamtinkerlaunch-*/* || "$entry" == steamtinkerlaunch-* ]] || fail "Unexpected archive layout: $entry"
+done <<< "$archive_entries"
+
 mkdir -p "$tmpdir/unpack"
 tar -xzf "$archive" -C "$tmpdir/unpack"
 source_dir="$(find "$tmpdir/unpack" -mindepth 1 -maxdepth 1 -type d -name 'steamtinkerlaunch-*' -print -quit)"
