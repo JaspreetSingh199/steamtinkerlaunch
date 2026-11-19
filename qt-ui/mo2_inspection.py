@@ -57,28 +57,38 @@ def find_mo2_installations(home: Path | None = None) -> list[Path]:
 
 
 def inspect_stl_installation(home: Path | None = None) -> dict:
-    """Inspect STL executable and Steam compatibility-tool registration without modifying anything."""
+    """Inspect STL executable and compatibility registration without following away the Steam link."""
     home = home or Path.home()
     data_home = Path(os.environ.get("XDG_DATA_HOME", home / ".local/share"))
     local_install = data_home / "stl-steam"
-    candidates = [
-        home / "stl/prefix/steamtinkerlaunch",
-        local_install / "steamtinkerlaunch",
-        local_install / "bin/steamtinkerlaunch",
-    ]
     steam_roots = find_steam_roots(home)
     compat_dirs = [root / "compatibilitytools.d/SteamTinkerLaunch" for root in steam_roots]
-    candidates.extend(directory / "steamtinkerlaunch" for directory in compat_dirs)
+    candidates = [
+        home / "stl/prefix/steamtinkerlaunch",
+        local_install / "bin/steamtinkerlaunch",
+        local_install / "steamtinkerlaunch",
+        *(directory / "steamtinkerlaunch" for directory in compat_dirs),
+    ]
     path_executable = shutil.which("steamtinkerlaunch")
     if path_executable:
         candidates.append(Path(path_executable))
     existing = []
     for candidate in candidates:
-        if candidate.is_file() and os.access(candidate, os.X_OK):
-            resolved = candidate.resolve()
-            if resolved not in existing:
-                existing.append(resolved)
-    compat_present = any(directory.exists() or directory.is_symlink() for directory in compat_dirs)
+        try:
+            if candidate.is_file() and os.access(candidate, os.X_OK):
+                resolved = candidate.resolve()
+                if resolved not in existing:
+                    existing.append(resolved)
+        except OSError:
+            continue
+    compat_present = False
+    for directory in compat_dirs:
+        try:
+            if directory.exists() or directory.is_symlink():
+                compat_present = True
+                break
+        except OSError:
+            continue
     return {
         "installed": bool(existing),
         "executables": [str(path) for path in existing],
